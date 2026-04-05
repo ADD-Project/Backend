@@ -23,6 +23,6 @@ public class AuthController {
     @PostMapping("/member/login")
     public ApiResponse<Long> memberLogin(@RequestBody LoginRequestDto request) {
         Member member = authService.memberLogin(request.getMemberCode());
-        return ApiResponse.success("200", "회원 로그인 성공", member.getId());
+        return ApiResponse.success("200", "회원 로그인 성공", member.getMemberId());
     }
 }

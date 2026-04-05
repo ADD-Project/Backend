@@ -30,10 +30,10 @@ public class MemberService {
                 .orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
 
         // 회원의 첫 번째 부서 이력(입소 정보) 조회
-        List<MemberDepartmentHistory> histories = historyRepository.findByMemberIdOrderByStartDateAsc(memberId);
+        List<MemberDepartmentHistory> histories = historyRepository.findByMemberOrderByStartDateAsc(member);
         if (histories.isEmpty()) {
             return MemberDetailResponseDto.builder()
-                    .memberId(member.getId()).name(member.getName()).profileImagePath(member.getProfileImagePath())
+                    .memberId(member.getMemberId()).name(member.getName()).profileImagePath(member.getProfileImagePath())
                     .build();
         }
 
@@ -41,16 +41,16 @@ public class MemberService {
         
         // 입소 시 부서에 있던 직원들 리스트 조회
         List<Member> colleagues = historyRepository.findColleaguesAtTime(
-                firstHistory.getDepartment().getId(), 
+                firstHistory.getDepartment().getDepartmentId(), 
                 firstHistory.getStartDate(), 
-                memberId);
+                member.getMemberId());
 
         List<ColleagueDto> colleagueDtos = colleagues.stream()
-                .map(c -> ColleagueDto.builder().memberId(c.getId()).name(c.getName()).profileImagePath(c.getProfileImagePath()).build())
+                .map(c -> ColleagueDto.builder().memberId(c.getMemberId()).name(c.getName()).profileImagePath(c.getProfileImagePath()).build())
                 .collect(Collectors.toList());
 
         return MemberDetailResponseDto.builder()
-                .memberId(member.getId())
+                .memberId(member.getMemberId())
                 .name(member.getName())
                 .profileImagePath(member.getProfileImagePath())
                 .joinDate(firstHistory.getStartDate())
@@ -62,7 +62,7 @@ public class MemberService {
     @Transactional(readOnly = true)
     public List<MemberSearchResponseDto> searchMembers(String name) {
         return memberRepository.findByNameContaining(name).stream()
-                .map(m -> MemberSearchResponseDto.builder().memberId(m.getId()).name(m.getName()).profileImagePath(m.getProfileImagePath()).build())
+                .map(m -> MemberSearchResponseDto.builder().memberId(m.getMemberId()).name(m.getName()).profileImagePath(m.getProfileImagePath()).build())
                 .collect(Collectors.toList());
     }
 
@@ -71,14 +71,14 @@ public class MemberService {
         LocalDateTime start = LocalDateTime.of(year, 1, 1, 0, 0);
         LocalDateTime end = LocalDateTime.of(year, 12, 31, 23, 59, 59);
         return memberRepository.findByCreatedAtBetween(start, end).stream()
-                .map(m -> MemberSearchResponseDto.builder().memberId(m.getId()).name(m.getName()).profileImagePath(m.getProfileImagePath()).build())
+                .map(m -> MemberSearchResponseDto.builder().memberId(m.getMemberId()).name(m.getName()).profileImagePath(m.getProfileImagePath()).build())
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<MemberSearchResponseDto> getAllMembers() {
         return memberRepository.findAll().stream()
-                .map(m -> MemberSearchResponseDto.builder().memberId(m.getId()).name(m.getName()).profileImagePath(m.getProfileImagePath()).build())
+                .map(m -> MemberSearchResponseDto.builder().memberId(m.getMemberId()).name(m.getName()).profileImagePath(m.getProfileImagePath()).build())
                 .collect(Collectors.toList());
     }
 }

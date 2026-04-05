@@ -1,22 +1,29 @@
 package com.example.ADD.project.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "department")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
-@Builder
+@Table(
+    name = "department",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_department_dept_cd", columnNames = "dept_cd")
+    }
+)
 public class Department {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "department_id")
-    private Long id;
+    private Long departmentId;
 
     @Column(name = "dept_cd", nullable = false, length = 30)
     private String deptCd;
@@ -27,8 +34,18 @@ public class Department {
     @Column(name = "closed_at")
     private LocalDate closedAt;
 
+    @Builder
+    public Department(String deptCd, LocalDate closedAt) {
+        this.deptCd = deptCd;
+        this.closedAt = closedAt;
+    }
+
     @PrePersist
-    public void prePersist() {
+    protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    public void updateClosedAt(LocalDate closedAt) {
+        this.closedAt = closedAt;
     }
 }

@@ -9,10 +9,10 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberDepartmentHistory, Long> {
-    List<MemberDepartmentHistory> findByMemberIdOrderByStartDateAsc(Long memberId);
+    List<MemberDepartmentHistory> findByMemberOrderByStartDateAsc(Member member);
 
-    @Query("SELECT h.member FROM MemberDepartmentHistory h WHERE h.department.id = :departmentId " +
+    @Query("SELECT h.member FROM MemberDepartmentHistory h WHERE h.department.departmentId = :departmentId " +
            "AND h.startDate <= :targetDate AND (h.endDate IS NULL OR h.endDate >= :targetDate) " +
-           "AND h.member.id != :memberId")
+           "AND h.member.memberId != :memberId")
     List<Member> findColleaguesAtTime(@Param("departmentId") Long departmentId, @Param("targetDate") LocalDate targetDate, @Param("memberId") Long memberId);
 }

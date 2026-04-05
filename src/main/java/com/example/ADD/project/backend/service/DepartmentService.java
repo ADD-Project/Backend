@@ -18,7 +18,7 @@ public class DepartmentService {
     @Transactional(readOnly = true)
     public List<DepartmentResponseDto> getAllDepartments() {
         return departmentRepository.findAll().stream()
-                .map(d -> new DepartmentResponseDto(d.getId(), d.getDeptCd(), d.getClosedAt()))
+                .map(d -> new DepartmentResponseDto(d.getDepartmentId(), d.getDeptCd(), d.getClosedAt()))
                 .collect(Collectors.toList());
     }
     
