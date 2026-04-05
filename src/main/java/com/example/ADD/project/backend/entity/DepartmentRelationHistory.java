@@ -6,26 +6,34 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "department")
+@Table(name = "department_relation_history")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class Department {
-    
+public class DepartmentRelationHistory {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "department_id")
+    @Column(name = "relation_history_id")
     private Long id;
 
-    @Column(name = "dept_cd", nullable = false, length = 30)
-    private String deptCd;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_department_id")
+    private Department parentDepartment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "child_department_id", nullable = false)
+    private Department childDepartment;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "closed_at")
-    private LocalDate closedAt;
 
     @PrePersist
     public void prePersist() {

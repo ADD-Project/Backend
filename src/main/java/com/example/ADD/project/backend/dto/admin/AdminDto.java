@@ -1,4 +1,4 @@
-package com.example.ADD.project.backend.dto;
+package com.example.ADD.project.backend.dto.admin;
 
 public class AdminDto {
     private Long id;

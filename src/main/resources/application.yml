@@ -1,0 +1,14 @@
+spring:
+  # SQLite Datasource 설정
+  datasource:
+    url: jdbc:sqlite:add_project.db
+    driver-class-name: org.sqlite.JDBC
+    username: ""
+    password: ""
+
+  # JPA / Hibernate 설정
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
