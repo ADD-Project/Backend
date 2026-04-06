@@ -17,12 +17,13 @@ public class DepartmentController {
 
     @PostMapping("/departments")
     public ApiResponse<String> createDepartment(@RequestBody DepartmentRequestDto request) {
-        // 부서 생성 로직 추가 위치
+        departmentService.createDepartment(request);
         return ApiResponse.success("200", "부서 생성 성공", null);
     }
 
     @PutMapping("/departments/{departmentId}")
     public ApiResponse<String> updateDepartment(@PathVariable Long departmentId, @RequestBody DepartmentRequestDto request) {
+        departmentService.updateDepartment(departmentId, request);
         return ApiResponse.success("200", "부서 수정 성공", null);
     }
 

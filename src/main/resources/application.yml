@@ -1,10 +1,9 @@
 spring:
-  # SQLite Datasource 설정
   datasource:
-    url: jdbc:sqlite:add_project.db
+    url: jdbc:sqlite:/Users/jeong-yeonghan/work/sqlite-tools-osx-arm64-3510300/test.db
     driver-class-name: org.sqlite.JDBC
-    username: ""
-    password: ""
+    hikari:
+      maximum-pool-size: 1
 
   # JPA / Hibernate 설정
   jpa:

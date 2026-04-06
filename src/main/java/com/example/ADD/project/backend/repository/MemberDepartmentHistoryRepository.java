@@ -15,4 +15,9 @@ public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberD
            "AND h.startDate <= :targetDate AND (h.endDate IS NULL OR h.endDate >= :targetDate) " +
            "AND h.member.memberId != :memberId")
     List<Member> findColleaguesAtTime(@Param("departmentId") Long departmentId, @Param("targetDate") LocalDate targetDate, @Param("memberId") Long memberId);
+
+    @Query("SELECT h.member FROM MemberDepartmentHistory h " +
+            "WHERE h.startDate >= :startOfYear AND h.startDate <= :endOfYear " +
+            "AND h.startDate = (SELECT MIN(h2.startDate) FROM MemberDepartmentHistory h2 WHERE h2.member = h.member)")
+    List<Member> findMembersByAdmissionYear(@Param("startOfYear") LocalDate startOfYear, @Param("endOfYear") LocalDate endOfYear);
 }

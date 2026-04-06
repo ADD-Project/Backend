@@ -28,13 +28,13 @@ public class MemberController {
 
     @PostMapping("/admin/import/single")
     public ApiResponse<String> registerSingleMember(@RequestBody SingleMemberRegisterRequestDto request) {
-        // 단건 등록 로직 추가 위치
+        memberService.registerSingleMember(request);
         return ApiResponse.success("200", "회원 단일 등록 성공", null);
     }
 
     @PutMapping("/members/{memberId}")
     public ApiResponse<String> updateMember(@PathVariable Long memberId, @RequestBody MemberUpdateRequestDto request) {
-        // 회원 수정 로직 추가 위치
+        memberService.updateMember(memberId, request);
         return ApiResponse.success("200", "회원 정보 수정 성공", null);
     }
 
