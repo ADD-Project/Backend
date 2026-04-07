@@ -21,9 +21,13 @@ public class DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final DepartmentNameHistoryRepository departmentNameHistoryRepository;
 
+    /**
+     * 부서 전체 조회
+     * Soft Delete 된 부서(closedAt이 null이 아닌 부서)는 제외하고 활성화된 부서만 조회합니다.
+     */
     @Transactional(readOnly = true)
     public List<DepartmentResponseDto> getAllDepartments() {
-        return departmentRepository.findAll().stream()
+        return departmentRepository.findByClosedAtIsNull().stream()
                 .map(d -> new DepartmentResponseDto(d.getDepartmentId(), d.getDeptCd(), d.getClosedAt()))
                 .collect(Collectors.toList());
     }
@@ -61,5 +65,16 @@ public class DepartmentService {
                 departmentNameHistoryRepository.save(newHistory);
             }
         }
+    }
+
+    /**
+     * 부서 삭제 (Soft Delete)
+     * 물리적으로 데이터를 삭제(DELETE)하지 않고, closedAt에 삭제 일자를 기록합니다.
+     * 이를 통해 사원의 과거 소속 부서 이력을 계속해서 조회할 수 있습니다.
+     */
+    @Transactional
+    public void deleteDepartment(Long departmentId) {
+        Department department = departmentRepository.findById(departmentId).orElseThrow(() -> new RuntimeException("부서를 찾을 수 없습니다."));
+        department.updateClosedAt(LocalDate.now());
     }
 }

@@ -36,7 +36,6 @@ public class MemberDepartmentHistory {
     @JoinColumn(name = "department_id", nullable = false)
     private Department department;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "region_name", nullable = false, length = 20)
     private RegionType regionName;
 

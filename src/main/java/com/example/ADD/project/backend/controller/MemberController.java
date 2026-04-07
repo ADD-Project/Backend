@@ -4,6 +4,8 @@ import com.example.ADD.project.backend.dto.member.*;
 import com.example.ADD.project.backend.dto.ApiResponse;
 import com.example.ADD.project.backend.service.MemberService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -51,5 +53,15 @@ public class MemberController {
     @GetMapping("/members")
     public ApiResponse<List<MemberSearchResponseDto>> getAllMembers() {
         return ApiResponse.success("200", "전체 회원 조회 성공", memberService.getAllMembers());
+    }
+
+    @GetMapping("/admin/members")
+    public ApiResponse<Page<MemberSearchResponseDto>> getAllMembersAdmin(Pageable pageable) {
+        return ApiResponse.success("200", "전체 회원 조회 성공", memberService.getAllMembersAdmin(pageable));
+    }
+
+    @GetMapping("/admin/members/{memberId}")
+    public ApiResponse<AdminMemberDetailResponseDto> getAdminMemberDetail(@PathVariable Long memberId) {
+        return ApiResponse.success("200", "조회 성공", memberService.getAdminMemberDetail(memberId));
     }
 }

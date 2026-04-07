@@ -13,5 +13,6 @@ public class MemberDetailResponseDto {
     private String profileImagePath;
     private LocalDate joinDate;
     private String joinDepartmentName;
+    private String joinDepartmentCode;
     private List<ColleagueDto> colleaguesAtJoin;
 }

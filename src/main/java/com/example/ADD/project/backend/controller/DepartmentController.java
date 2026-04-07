@@ -31,4 +31,10 @@ public class DepartmentController {
     public ApiResponse<List<DepartmentResponseDto>> getAllDepartments() {
         return ApiResponse.success("200", "부서 조회 성공", departmentService.getAllDepartments());
     }
+
+    @DeleteMapping("/departments/{departmentId}")
+    public ApiResponse<String> deleteDepartment(@PathVariable Long departmentId) {
+        departmentService.deleteDepartment(departmentId);
+        return ApiResponse.success("200", "부서 삭제 성공", null);
+    }
 }

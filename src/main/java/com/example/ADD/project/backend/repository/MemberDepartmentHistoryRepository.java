@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberDepartmentHistory, Long> {
     List<MemberDepartmentHistory> findByMemberOrderByStartDateAsc(Member member);
@@ -20,4 +21,6 @@ public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberD
             "WHERE h.startDate >= :startOfYear AND h.startDate <= :endOfYear " +
             "AND h.startDate = (SELECT MIN(h2.startDate) FROM MemberDepartmentHistory h2 WHERE h2.member = h.member)")
     List<Member> findMembersByAdmissionYear(@Param("startOfYear") LocalDate startOfYear, @Param("endOfYear") LocalDate endOfYear);
+
+    Optional<MemberDepartmentHistory> findTopByMemberOrderByStartDateDesc(Member member);
 }
