@@ -8,16 +8,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 public interface DepartmentNameHistoryRepository extends JpaRepository<DepartmentNameHistory, Long> {
 
     List<DepartmentNameHistory> findByDepartmentOrderByStartDateAsc(Department department);
 
-    Optional<DepartmentNameHistory> findFirstByDepartmentAndDeptNameOrderByStartDateAsc(Department department, String deptName);
-
+    // Optional 대신 List로 반환하여 2개 이상 나올 경우 가장 첫 번째 요소를 사용할 수 있도록 수정
     @Query("SELECT dnh.deptName FROM DepartmentNameHistory dnh " +
            "WHERE dnh.department.departmentId = :departmentId " +
-           "AND dnh.startDate <= :targetDate AND (dnh.endDate IS NULL OR dnh.endDate >= :targetDate)")
-    Optional<String> findDeptNameAtTime(@Param("departmentId") Long departmentId, @Param("targetDate") LocalDate targetDate);
+           "AND dnh.startDate <= :targetDate AND (dnh.endDate IS NULL OR dnh.endDate >= :targetDate) " +
+           "ORDER BY dnh.startDate DESC")
+    List<String> findDeptNameAtTime(@Param("departmentId") Long departmentId, @Param("targetDate") LocalDate targetDate);
 }

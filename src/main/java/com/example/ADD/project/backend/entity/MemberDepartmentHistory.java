@@ -13,13 +13,8 @@ import java.time.LocalDateTime;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(
-    name = "member_department_history",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_member_department_history",
-            columnNames = {"member_id", "department_id", "start_date"}
-        )
-    }
+    name = "member_department_history"
+    // UNIQUE 제약조건 해제: 동일한 시작일(startDate)에 여러 부서 이동 이력이 발생할 수 있으므로 제거함
 )
 public class MemberDepartmentHistory {
 

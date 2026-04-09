@@ -48,4 +48,8 @@ public class Department {
     public void updateClosedAt(LocalDate closedAt) {
         this.closedAt = closedAt;
     }
+
+    public void updateDeptCd(String deptCd) {
+        this.deptCd = deptCd;
+    }
 }

@@ -24,7 +24,7 @@ public class MemberController {
 
     @PostMapping("/admin/import/files")
     public ApiResponse<String> importMembersByFile(@RequestParam("file") MultipartFile file) {
-        // Excel 파싱 및 벌크 인서트 로직 추가 위치
+        memberService.importMembersByExcel(file);
         return ApiResponse.success("200", "엑셀 업로드 성공", null);
     }
 

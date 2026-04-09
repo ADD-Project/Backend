@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberDepartmentHistory, Long> {
-    List<MemberDepartmentHistory> findByMemberOrderByStartDateAsc(Member member);
+
+    // 사원의 부서 이력을 시작일 오름차순, 시작일이 같으면 종료일 오름차순으로 조회
+    List<MemberDepartmentHistory> findByMemberOrderByStartDateAscEndDateAsc(Member member);
 
     @Query("SELECT h.member FROM MemberDepartmentHistory h WHERE h.department.departmentId = :departmentId " +
            "AND h.startDate <= :targetDate AND (h.endDate IS NULL OR h.endDate >= :targetDate) " +
