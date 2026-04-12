@@ -13,5 +13,6 @@ import java.time.LocalDate;
 public class DepartmentResponseDto {
     private Long departmentId;
     private String deptCd;
+    private String deptName;
     private LocalDate closedAt;
 }

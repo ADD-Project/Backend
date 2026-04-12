@@ -9,6 +9,8 @@ import java.util.List;
 @Builder
 public class AdminMemberDetailResponseDto {
     private String memberCode;
+    private String name;
+    private String profileImagePath;
     private String joinDepartmentName;
     private LocalDate joinDate;
     private List<DepartmentHistoryDto> departmentHistories;

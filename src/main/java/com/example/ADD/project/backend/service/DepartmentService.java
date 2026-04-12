@@ -30,7 +30,18 @@ public class DepartmentService {
     @Transactional(readOnly = true)
     public List<DepartmentResponseDto> getAllDepartments() {
         return departmentRepository.findByClosedAtIsNull().stream()
-                .map(d -> new DepartmentResponseDto(d.getDepartmentId(), d.getDeptCd(), d.getClosedAt()))
+                .map(d -> {
+                    // 현재 활성화된 가장 최신의 부서명을 가져옴
+                    List<String> names = departmentNameHistoryRepository.findDeptNameAtTime(d.getDepartmentId(), LocalDate.now());
+                    String deptName = names.isEmpty() ? d.getDeptCd() : names.get(0);
+
+                    return DepartmentResponseDto.builder()
+                            .departmentId(d.getDepartmentId())
+                            .deptCd(d.getDeptCd())
+                            .deptName(deptName)
+                            .closedAt(d.getClosedAt())
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 

@@ -22,8 +22,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -100,7 +98,7 @@ public class MemberService {
 
     /**
      * [관리자용] 회원 1명 상세 조회
-     * - 사번, 입소부서, 입소날짜, 부서이동이력(변경 부서, 변경 날짜) 리스트가 포함됩니다.
+     * - 사번, 사원명, 프로필이미지, 입소부서, 입소날짜, 부서이동이력(변경 부서, 변경 날짜) 리스트가 포함됩니다.
      */
     @Transactional(readOnly = true)
     public AdminMemberDetailResponseDto getAdminMemberDetail(Long memberId) {
@@ -113,6 +111,8 @@ public class MemberService {
         if (histories.isEmpty()) {
             return AdminMemberDetailResponseDto.builder()
                     .memberCode(member.getMemberCode())
+                    .name(member.getName())
+                    .profileImagePath(member.getProfileImagePath())
                     .build();
         }
 
@@ -139,6 +139,8 @@ public class MemberService {
 
         return AdminMemberDetailResponseDto.builder()
                 .memberCode(member.getMemberCode())
+                .name(member.getName())
+                .profileImagePath(member.getProfileImagePath())
                 .joinDepartmentName(joinDeptName)
                 .joinDate(joinDate)
                 .departmentHistories(historyDtos)
@@ -282,35 +284,42 @@ public class MemberService {
                 LocalDate startDate = LocalDate.now(); // 기본값 현재 날짜
 
                 // 날짜 컬럼 파싱 (인덱스 6)
-                String dateStr = getCellValueAsString(row.getCell(7));
-                if (dateStr != null && !dateStr.trim().isEmpty()) {
-                    dateStr = dateStr.trim();
-                    try {
-                        // 1. 숫자만 있는 경우 (엑셀 날짜 일련번호)
-                        if (dateStr.matches("\\d+")) {
-                            double excelDate = Double.parseDouble(dateStr);
-                            Date date = DateUtil.getJavaDate(excelDate);
+                Cell dateCell = row.getCell(7);
+                if (dateCell != null) {
+                    if (dateCell.getCellType() == CellType.NUMERIC) {
+                        if(DateUtil.isCellDateFormatted(dateCell)) {
+                            Date date = dateCell.getDateCellValue();
                             if (date != null) {
                                 startDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
                             }
-                        } 
-                        // 2. yyyyMMdd 형식 (하이픈 없음)
-                        else if (dateStr.matches("\\d{8}")) {
-                            startDate = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyyMMdd"));
-                        } 
-                        // 3. 그 외 형식 (yyyy-MM-dd, yyyy.MM.dd, yyyy/MM/dd 등)
-                        else {
-                            dateStr = dateStr.replace(".", "-").replace("/", "-");
-                            // 포맷에 따라 적절히 파싱을 시도
+                        } else {
                             try {
-                                startDate = LocalDate.parse(dateStr); // 기본 ISO 포맷 (yyyy-MM-dd)
-                            } catch (DateTimeParseException e) {
-                                // 파싱에 실패하면 기본값(현재 날짜) 유지
-                                System.err.println("날짜 파싱 실패: " + dateStr);
+                                double excelDate = dateCell.getNumericCellValue();
+                                Date date = DateUtil.getJavaDate(excelDate);
+                                if (date != null) {
+                                    startDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                                }
+                            } catch (Exception e) {
+                                // ignore
                             }
                         }
-                    } catch (Exception e) {
-                        System.err.println("날짜 처리 중 에러 발생: " + dateStr);
+                    } else if(dateCell.getCellType() == CellType.STRING) {
+                        String dateStr = dateCell.getStringCellValue();
+                        try {
+                            if (dateStr.matches("\\d+")) {
+                                double excelDate = Double.parseDouble(dateStr);
+                                Date date = DateUtil.getJavaDate(excelDate);
+                                if (date != null) {
+                                    startDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                                }
+                            } else {
+                                // 엑셀에서 날짜 포맷이 'yyyy.MM.dd' 혹은 'yyyy/MM/dd' 등일 경우를 대비하여 하이픈으로 통일
+                                dateStr = dateStr.replace(".", "-").replace("/", "-");
+                                startDate = LocalDate.parse(dateStr);
+                            }
+                        } catch (Exception e) {
+                            // 날짜 파싱 실패 시 현재 날짜로 대체하거나 에러 처리
+                        }
                     }
                 }
 
