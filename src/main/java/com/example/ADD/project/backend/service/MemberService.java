@@ -456,4 +456,16 @@ public class MemberService {
         if (request.getName() != null) member.updateName(request.getName());
         if (request.getProfileImagePath() != null) member.updateProfileImagePath(request.getProfileImagePath());
     }
+
+    @Transactional
+    public void deleteMember(Long memberId) {
+        Member member = memberRepository.findById(memberId).orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
+        
+        // 연관된 MemberDepartmentHistory 데이터도 삭제가 필요한 경우 추가
+        // member가 삭제될 때 JPA Cascade나 DB의 ON DELETE CASCADE가 설정되어 있지 않다면 수동으로 삭제해야 합니다.
+        List<MemberDepartmentHistory> histories = historyRepository.findByMemberOrderByStartDateAscEndDateAsc(member);
+        historyRepository.deleteAll(histories);
+        
+        memberRepository.delete(member);
+    }
 }

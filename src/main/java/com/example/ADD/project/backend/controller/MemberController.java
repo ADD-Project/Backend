@@ -69,4 +69,10 @@ public class MemberController {
     public ApiResponse<AdminMemberDetailResponseDto> getAdminMemberDetail(@PathVariable Long memberId) {
         return ApiResponse.success("200", "조회 성공", memberService.getAdminMemberDetail(memberId));
     }
+
+    @DeleteMapping("/admin/members/{memberId}")
+    public ApiResponse<String> deleteMember(@PathVariable Long memberId) {
+        memberService.deleteMember(memberId);
+        return ApiResponse.success("200", "회원 삭제 성공", null);
+    }
 }
