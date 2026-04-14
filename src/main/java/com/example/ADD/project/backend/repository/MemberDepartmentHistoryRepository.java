@@ -24,5 +24,13 @@ public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberD
             "AND h.startDate = (SELECT MIN(h2.startDate) FROM MemberDepartmentHistory h2 WHERE h2.member = h.member)")
     List<Member> findMembersByAdmissionYear(@Param("startOfYear") LocalDate startOfYear, @Param("endOfYear") LocalDate endOfYear);
 
+    @Query("SELECT MIN(h.startDate) FROM MemberDepartmentHistory h " +
+           "WHERE h.startDate = (SELECT MIN(h2.startDate) FROM MemberDepartmentHistory h2 WHERE h2.member = h.member)")
+    LocalDate findMinAdmissionDate();
+
+    @Query("SELECT MAX(h.startDate) FROM MemberDepartmentHistory h " +
+           "WHERE h.startDate = (SELECT MIN(h2.startDate) FROM MemberDepartmentHistory h2 WHERE h2.member = h.member)")
+    LocalDate findMaxAdmissionDate();
+
     Optional<MemberDepartmentHistory> findTopByMemberOrderByStartDateDesc(Member member);
 }

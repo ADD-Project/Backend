@@ -45,6 +45,11 @@ public class MemberController {
         return ApiResponse.success("200", "검색 성공", memberService.searchMembers(name));
     }
 
+    @GetMapping("/members/admission-years/range")
+    public ApiResponse<AdmissionYearRangeDto> getAdmissionYearRange() {
+        return ApiResponse.success("200", "연도 범위 조회 성공", memberService.getAdmissionYearRange());
+    }
+
     @GetMapping("/members/admission-years/{year}")
     public ApiResponse<List<MemberSearchResponseDto>> getMembersByYear(@PathVariable int year) {
         return ApiResponse.success("200", "연도별 조회 성공", memberService.getMembersByAdmissionYear(year));

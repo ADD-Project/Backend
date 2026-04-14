@@ -162,6 +162,17 @@ public class MemberService {
                 .map(this::createMemberSearchResponseDto)
                 .collect(Collectors.toList());
     }
+    
+    @Transactional(readOnly = true)
+    public AdmissionYearRangeDto getAdmissionYearRange() {
+        LocalDate minDate = historyRepository.findMinAdmissionDate();
+        LocalDate maxDate = historyRepository.findMaxAdmissionDate();
+        
+        return AdmissionYearRangeDto.builder()
+                .minYear(minDate != null ? minDate.getYear() : null)
+                .maxYear(maxDate != null ? maxDate.getYear() : null)
+                .build();
+    }
 
     /**
      * [관리자용] 회원 전체 목록 조회 (페이지네이션 적용)
@@ -441,6 +452,7 @@ public class MemberService {
     @Transactional
     public void updateMember(Long memberId, MemberUpdateRequestDto request) {
         Member member = memberRepository.findById(memberId).orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
+        if (request.getMemberCode() != null) member.updateMemberCode(request.getMemberCode());
         if (request.getName() != null) member.updateName(request.getName());
         if (request.getProfileImagePath() != null) member.updateProfileImagePath(request.getProfileImagePath());
     }
