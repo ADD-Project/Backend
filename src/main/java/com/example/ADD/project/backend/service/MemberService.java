@@ -196,7 +196,7 @@ public class MemberService {
     private MemberSearchResponseDto createMemberSearchResponseDto(Member member) {
         List<MemberDepartmentHistory> histories = historyRepository.findByMemberOrderByStartDateAscEndDateAsc(member);
         String joinDeptName = null;
-        Integer admissionYear = null;
+        int admissionYear = 0;
 
         if (!histories.isEmpty()) {
             MemberDepartmentHistory firstHistory = histories.get(0);
