@@ -31,9 +31,6 @@ public class MemberDepartmentHistory {
     @JoinColumn(name = "department_id", nullable = false)
     private Department department;
 
-    @Column(name = "region_name", nullable = false, length = 20)
-    private RegionType regionName;
-
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
@@ -44,11 +41,10 @@ public class MemberDepartmentHistory {
     private LocalDateTime createdAt;
 
     @Builder
-    public MemberDepartmentHistory(Member member, Department department, RegionType regionName,
+    public MemberDepartmentHistory(Member member, Department department, 
                                    LocalDate startDate, LocalDate endDate) {
         this.member = member;
         this.department = department;
-        this.regionName = regionName;
         this.startDate = startDate;
         this.endDate = endDate;
     }
@@ -62,7 +58,4 @@ public class MemberDepartmentHistory {
         this.endDate = endDate;
     }
 
-    public void updateRegionName(RegionType regionName) {
-        this.regionName = regionName;
-    }
 }

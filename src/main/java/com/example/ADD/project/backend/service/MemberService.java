@@ -5,7 +5,6 @@ import com.example.ADD.project.backend.entity.Department;
 import com.example.ADD.project.backend.entity.DepartmentNameHistory;
 import com.example.ADD.project.backend.entity.Member;
 import com.example.ADD.project.backend.entity.MemberDepartmentHistory;
-import com.example.ADD.project.backend.entity.RegionType;
 import com.example.ADD.project.backend.repository.DepartmentNameHistoryRepository;
 import com.example.ADD.project.backend.repository.DepartmentRepository;
 import com.example.ADD.project.backend.repository.MemberDepartmentHistoryRepository;
@@ -263,7 +262,6 @@ public class MemberService {
             MemberDepartmentHistory history = MemberDepartmentHistory.builder()
                     .member(member)
                     .department(dept)
-                    .regionName(RegionType.from(request.getRegionName()))
                     .startDate(newStartDate)
                     .build();
             historyRepository.save(history);
@@ -334,8 +332,6 @@ public class MemberService {
                     }
                 }
 
-                String regionNameStr = getCellValueAsString(row.getCell(8));
-
                 // 1. 사원 처리 (없으면 생성)
                 Member member = memberRepository.findByMemberCode(memberCode).orElse(null);
                 if (member == null) {
@@ -397,22 +393,10 @@ public class MemberService {
                         continue; // 다음 엑셀 행으로 이동
                     }
 
-                    // RegionType 에러 방지. 지역명이 매칭되지 않으면 BUSAN으로 기본 처리.
-                    RegionType regionType;
-                    try {
-                        regionType = RegionType.from(regionNameStr);
-                        if (regionType == null) {
-                            regionType = RegionType.BUSAN; // 기본값
-                        }
-                    } catch (IllegalArgumentException e) {
-                        regionType = RegionType.BUSAN; // 예외 발생 시 기본값
-                    }
-
                     // 새 부서 이력 저장
                     MemberDepartmentHistory history = MemberDepartmentHistory.builder()
                             .member(member)
                             .department(finalDept)
-                            .regionName(regionType)
                             .startDate(startDate)
                             .build();
                     historyRepository.save(history);

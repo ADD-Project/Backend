@@ -9,6 +9,5 @@ public class SingleMemberRegisterRequestDto {
     private String name;
     private String profileImagePath;
     private Long initialDepartmentId;
-    private String regionName;
     private LocalDate startDate;
 }
