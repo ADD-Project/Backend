@@ -11,4 +11,5 @@ public class MemberSearchResponseDto {
     private String name;
     private String profileImagePath;
     private String joinDepartmentName;
+    private int admissionYear;
 }

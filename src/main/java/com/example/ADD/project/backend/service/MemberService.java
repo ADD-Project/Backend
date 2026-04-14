@@ -196,11 +196,13 @@ public class MemberService {
     private MemberSearchResponseDto createMemberSearchResponseDto(Member member) {
         List<MemberDepartmentHistory> histories = historyRepository.findByMemberOrderByStartDateAscEndDateAsc(member);
         String joinDeptName = null;
+        Integer admissionYear = null;
 
         if (!histories.isEmpty()) {
             MemberDepartmentHistory firstHistory = histories.get(0);
             Long joinDeptId = firstHistory.getDepartment().getDepartmentId();
             LocalDate joinDate = firstHistory.getStartDate();
+            admissionYear = joinDate.getYear();
             List<String> joinDeptNames = departmentNameHistoryRepository.findDeptNameAtTime(joinDeptId, joinDate);
             joinDeptName = joinDeptNames.isEmpty() ? firstHistory.getDepartment().getDeptCd() : joinDeptNames.get(0);
         }
@@ -211,6 +213,7 @@ public class MemberService {
                 .name(member.getName())
                 .profileImagePath(member.getProfileImagePath())
                 .joinDepartmentName(joinDeptName)
+                .admissionYear(admissionYear)
                 .build();
     }
 
