@@ -19,6 +19,6 @@ public class WebConfig implements WebMvcConfigurer {
         // 일반 회원 로그인 체크 인터셉터 (예: /members/**, /member/**)
         registry.addInterceptor(new MemberCheckInterceptor())
                 .addPathPatterns("/members/**", "/member/**", "/departments/**") // 부서 관련도 로그인 필요하면 추가
-                .excludePathPatterns("/member/login"); // 로그인 API는 제외
+                .excludePathPatterns("/member/login", "/members/admission-years/range", "/members/admission-years/*", "/members"); // 로그인 API 및 비로그인 허용 API 제외
     }
 }
