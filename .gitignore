@@ -38,3 +38,4 @@ out/
 src/test/resources/application.yml
 test.db
 add_project.db
+
