@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -24,20 +25,32 @@ public class MemberController {
 
     @PostMapping("/admin/import/files")
     public ApiResponse<String> importMembersByFile(@RequestParam("file") MultipartFile file) {
-        memberService.importMembersByExcel(file);
-        return ApiResponse.success("200", "엑셀 업로드 성공", null);
+        try {
+            memberService.importMembersByExcel(file);
+            return ApiResponse.success("200", "엑셀 업로드 성공", null);
+        } catch (Exception e) {
+            return ApiResponse.error("400", e.getMessage());
+        }
     }
 
     @PostMapping("/admin/import/single")
     public ApiResponse<String> registerSingleMember(@RequestBody SingleMemberRegisterRequestDto request) {
-        memberService.registerSingleMember(request);
-        return ApiResponse.success("200", "회원 단일 등록 성공", null);
+        try {
+            memberService.registerSingleMember(request);
+            return ApiResponse.success("200", "회원 단일 등록 성공", null);
+        } catch (Exception e) {
+            return ApiResponse.error("400", e.getMessage());
+        }
     }
 
     @PutMapping("/members/{memberId}")
     public ApiResponse<String> updateMember(@PathVariable Long memberId, @RequestBody MemberUpdateRequestDto request) {
-        memberService.updateMember(memberId, request);
-        return ApiResponse.success("200", "회원 정보 수정 성공", null);
+        try {
+            memberService.updateMember(memberId, request);
+            return ApiResponse.success("200", "회원 정보 수정 성공", null);
+        } catch (Exception e) {
+            return ApiResponse.error("400", e.getMessage());
+        }
     }
 
     @GetMapping("/members/search")

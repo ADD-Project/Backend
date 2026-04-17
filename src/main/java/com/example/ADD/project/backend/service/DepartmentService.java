@@ -25,21 +25,29 @@ public class DepartmentService {
 
     /**
      * 부서 전체 조회
-     * 모든 부서를 조회하며, 현재(또는 특정 시점) 기준의 부서명을 반환합니다.
+     * 부서의 '모든 이름 변경 이력'을 시작일(startDate)과 함께 펼쳐서(Flat) 반환합니다.
+     * 이름 변경 이력이 여러 개인 부서는 여러 개의 항목으로 나뉘어 반환됩니다.
      */
     @Transactional(readOnly = true)
     public List<DepartmentResponseDto> getAllDepartments() {
         return departmentRepository.findAll().stream()
-                .map(d -> {
-                    // 조회 시점(현재) 기준의 부서명을 가져옴
-                    List<String> names = departmentNameHistoryRepository.findDeptNameAtTime(d.getDepartmentId(), LocalDate.now());
-                    String deptName = names.isEmpty() ? d.getDeptCd() : names.get(0);
-
-                    return DepartmentResponseDto.builder()
+                .flatMap(d -> {
+                    List<DepartmentNameHistory> histories = departmentNameHistoryRepository.findByDepartmentOrderByStartDateAsc(d);
+                    
+                    if (histories.isEmpty()) {
+                        return java.util.stream.Stream.of(DepartmentResponseDto.builder()
+                                .departmentId(d.getDepartmentId())
+                                .deptCd(d.getDeptCd())
+                                .deptName(d.getDeptCd())
+                                .build());
+                    }
+                    
+                    return histories.stream().map(h -> DepartmentResponseDto.builder()
                             .departmentId(d.getDepartmentId())
                             .deptCd(d.getDeptCd())
-                            .deptName(deptName)
-                            .build();
+                            .deptName(h.getDeptName())
+                            .startDate(h.getStartDate())
+                            .build());
                 })
                 .collect(Collectors.toList());
     }

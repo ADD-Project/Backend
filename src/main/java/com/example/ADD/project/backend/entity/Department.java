@@ -31,22 +31,14 @@ public class Department {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "closed_at")
-    private LocalDate closedAt;
-
     @Builder
-    public Department(String deptCd, LocalDate closedAt) {
+    public Department(String deptCd) {
         this.deptCd = deptCd;
-        this.closedAt = closedAt;
     }
 
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
-    }
-
-    public void updateClosedAt(LocalDate closedAt) {
-        this.closedAt = closedAt;
     }
 
     public void updateDeptCd(String deptCd) {
