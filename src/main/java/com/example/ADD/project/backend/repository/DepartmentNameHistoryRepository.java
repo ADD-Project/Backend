@@ -13,10 +13,10 @@ public interface DepartmentNameHistoryRepository extends JpaRepository<Departmen
 
     List<DepartmentNameHistory> findByDepartmentOrderByStartDateAsc(Department department);
 
-    // Optional 대신 List로 반환하여 2개 이상 나올 경우 가장 첫 번째 요소를 사용할 수 있도록 수정
     @Query("SELECT dnh.deptName FROM DepartmentNameHistory dnh " +
-           "WHERE dnh.department.departmentId = :departmentId " +
-           "AND dnh.startDate <= :targetDate AND (dnh.endDate IS NULL OR dnh.endDate >= :targetDate) " +
-           "ORDER BY dnh.startDate DESC")
-    List<String> findDeptNameAtTime(@Param("departmentId") Long departmentId, @Param("targetDate") LocalDate targetDate);
+            "WHERE dnh.department.departmentId = :departmentId " +
+            "AND dnh.startDate <= :targetDate " +
+            "ORDER BY dnh.startDate DESC")
+    List<String> findDeptNameAtTime(@Param("departmentId") Long departmentId,
+                                    @Param("targetDate") LocalDate targetDate);
 }

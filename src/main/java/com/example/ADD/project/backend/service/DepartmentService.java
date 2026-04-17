@@ -25,13 +25,13 @@ public class DepartmentService {
 
     /**
      * 부서 전체 조회
-     * Soft Delete 된 부서(closedAt이 null이 아닌 부서)는 제외하고 활성화된 부서만 조회합니다.
+     * 모든 부서를 조회하며, 현재(또는 특정 시점) 기준의 부서명을 반환합니다.
      */
     @Transactional(readOnly = true)
     public List<DepartmentResponseDto> getAllDepartments() {
-        return departmentRepository.findByClosedAtIsNull().stream()
+        return departmentRepository.findAll().stream()
                 .map(d -> {
-                    // 현재 활성화된 가장 최신의 부서명을 가져옴
+                    // 조회 시점(현재) 기준의 부서명을 가져옴
                     List<String> names = departmentNameHistoryRepository.findDeptNameAtTime(d.getDepartmentId(), LocalDate.now());
                     String deptName = names.isEmpty() ? d.getDeptCd() : names.get(0);
 
@@ -39,7 +39,6 @@ public class DepartmentService {
                             .departmentId(d.getDepartmentId())
                             .deptCd(d.getDeptCd())
                             .deptName(deptName)
-                            .closedAt(d.getClosedAt())
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -142,11 +141,17 @@ public class DepartmentService {
     }
 
     /**
-     * 부서 삭제 (Soft Delete)
+     * 부서 삭제 (Hard Delete)
+     * 폐지 부서 개념이 없어졌으므로 물리적 삭제를 수행합니다.
      */
     @Transactional
     public void deleteDepartment(Long departmentId) {
         Department department = departmentRepository.findById(departmentId).orElseThrow(() -> new RuntimeException("부서를 찾을 수 없습니다."));
-        department.updateClosedAt(LocalDate.now());
+        
+        // 연관된 부서명 이력 삭제 (DB FK CASCADE 설정이 없다면 수동 삭제 필요)
+        List<DepartmentNameHistory> histories = departmentNameHistoryRepository.findByDepartmentOrderByStartDateAsc(department);
+        departmentNameHistoryRepository.deleteAll(histories);
+        
+        departmentRepository.delete(department);
     }
 }

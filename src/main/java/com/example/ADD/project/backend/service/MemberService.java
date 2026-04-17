@@ -62,7 +62,6 @@ public class MemberService {
         LocalDate joinDate = firstHistory.getStartDate();
 
         // 입소 당시 부서명 조회 (해당 일자 기준 부서 이름 이력에서 추출)
-        // 부서가 Soft Delete(closedAt) 되었더라도 과거 이력은 유지되므로 정상 조회됨
         List<String> joinDeptNames = departmentNameHistoryRepository.findDeptNameAtTime(joinDeptId, joinDate);
         String joinDeptName = joinDeptNames.isEmpty() ? firstHistory.getDepartment().getDeptCd() : joinDeptNames.get(0);
 
@@ -228,187 +227,247 @@ public class MemberService {
                     Member newMember = Member.builder()
                             .memberCode(request.getMemberCode())
                             .name(request.getName())
-                            .profileImagePath(null) // 단일 등록 시 프로필 이미지는 기본 null
+                            .profileImagePath(request.getProfileImagePath()) 
                             .build();
                     return memberRepository.save(newMember);
                 });
 
-        // 초기 부서 정보가 주어진 경우 부서 이력(History) 추가
-        if (request.getInitialDepartmentId() != null) {
-            Department dept = departmentRepository.findById(request.getInitialDepartmentId())
-                    .orElseThrow(() -> new RuntimeException("부서를 찾을 수 없습니다."));
+        // 사원의 모든 부서 이력을 리스트로 순회하며 한 번에 처리
+        if (request.getHistories() != null && !request.getHistories().isEmpty()) {
+            for (MemberDepartmentHistoryRequestDto histReq : request.getHistories()) {
+                
+                // 1. 부서 검증 (deptCode 기준)
+                Department dept = departmentRepository.findByDeptCd(histReq.getDeptCode())
+                        .orElseThrow(() -> new RuntimeException("존재하지 않는 부서코드입니다: " + histReq.getDeptCode()));
 
-            LocalDate newStartDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+                LocalDate startDate = histReq.getStartDate() != null ? histReq.getStartDate() : LocalDate.now();
 
-            // 사원의 가장 최근 부서 이력을 확인하여, 새 이력 추가 및 기존 이력 종료일 업데이트 처리
-            Optional<MemberDepartmentHistory> lastHistoryOpt = historyRepository.findTopByMemberOrderByStartDateDesc(member);
-
-            if (lastHistoryOpt.isPresent()) {
-                MemberDepartmentHistory lastHistory = lastHistoryOpt.get();
-                Long lastDeptId = lastHistory.getDepartment().getDepartmentId();
-                List<String> lastDeptNames = departmentNameHistoryRepository.findDeptNameAtTime(lastDeptId, lastHistory.getStartDate());
-                String lastDeptNameAtStart = lastDeptNames.isEmpty() ? lastHistory.getDepartment().getDeptCd() : lastDeptNames.get(0);
-
-                List<String> newDeptNames = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), newStartDate);
-                String newDeptNameAtStart = newDeptNames.isEmpty() ? dept.getDeptCd() : newDeptNames.get(0);
-
-                // 현재 처리하려는 이력이 이전 이력과 완전히 동일한지 확인 (부서 ID, 부서명, 시작일 모두 동일)
-                if (lastDeptId.equals(dept.getDepartmentId()) && lastDeptNameAtStart.equals(newDeptNameAtStart) &&
-                        lastHistory.getStartDate().equals(newStartDate)) {
-                    throw new RuntimeException("현재 소속된 부서와 완전히 동일한 부서 이력을 동일한 시작일로 추가할 수 없습니다.");
+                // 2. 부서명 시점 검증 (사이드이펙트 방지: 부서명을 마음대로 생성하지 않고 예외처리)
+                if (histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
+                    List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
+                    
+                    if (deptNamesAtTime.isEmpty()) {
+                        throw new RuntimeException(startDate + " 기준 부서명 이력이 없습니다. 부서코드: " + dept.getDeptCd());
+                    }
+                    
+                    String actualDeptName = deptNamesAtTime.get(0);
+                    if (!actualDeptName.equals(histReq.getDeptName())) {
+                        throw new RuntimeException("입력한 부서명과 해당 일자의 실제 부서명이 일치하지 않습니다. "
+                                + "[입력값=" + histReq.getDeptName() + ", 실제값=" + actualDeptName + "]");
+                    }
                 }
 
-                // 부서 이름 이력에 맞추어 종료일 업데이트 로직 삭제
-            }
+                // 3. 중복 이력 검사 (종료일 고려 없이 시작일과 부서ID로만 정확히 판별)
+                boolean alreadyExists = historyRepository.findByMemberOrderByStartDateAscEndDateAsc(member).stream()
+                        .anyMatch(h -> h.getDepartment().getDepartmentId().equals(dept.getDepartmentId())
+                                && h.getStartDate().equals(startDate));
 
-            // 새 부서 이력 저장
-            MemberDepartmentHistory history = MemberDepartmentHistory.builder()
-                    .member(member)
-                    .department(dept)
-                    .startDate(newStartDate)
-                    .build();
-            historyRepository.save(history);
+                if (alreadyExists) {
+                    continue; // 이미 동일한 날짜에 동일한 부서 이력이 있다면 중복 저장 방지
+                }
+
+                // 4. 새 부서 이력 저장 (endDate 무시)
+                MemberDepartmentHistory history = MemberDepartmentHistory.builder()
+                        .member(member)
+                        .department(dept)
+                        .startDate(startDate)
+                        .build();
+                historyRepository.save(history);
+            }
         }
     }
 
     /**
-     * 엑셀 파일 파싱 및 대량 등록 (고유번호, 성명, 당시운영부서코드, 당시운영부서명, 발령코드, 발령명, 시작일, 지역명)
+     * 1. 부서 엑셀 업로드
+     * 형식:
+     * 1열: 부서코드
+     * 2열: 부서명
+     * 3열: 시작일
+     */
+    @Transactional
+    public void importDepartmentsByExcel(MultipartFile file) {
+        try (InputStream is = file.getInputStream();
+             Workbook workbook = WorkbookFactory.create(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                String deptCode = getCellValueAsString(row.getCell(0)).trim();
+                String deptName = getCellValueAsString(row.getCell(1)).trim();
+                LocalDate startDate = parseLocalDate(row.getCell(2));
+
+                if (deptCode.isEmpty() || deptName.isEmpty() || startDate == null) {
+                    continue;
+                }
+
+                Department department = departmentRepository.findByDeptCd(deptCode)
+                        .orElseGet(() -> departmentRepository.save(
+                                Department.builder()
+                                        .deptCd(deptCode)
+                                        .build()
+                        ));
+
+                boolean alreadyExists = departmentNameHistoryRepository
+                        .findByDepartmentOrderByStartDateAsc(department)
+                        .stream()
+                        .anyMatch(history ->
+                                history.getDeptName().equals(deptName)
+                                        && history.getStartDate().equals(startDate)
+                        );
+
+                if (alreadyExists) {
+                    continue;
+                }
+
+                DepartmentNameHistory history = DepartmentNameHistory.builder()
+                        .department(department)
+                        .deptName(deptName)
+                        .startDate(startDate)
+                        .build();
+
+                departmentNameHistoryRepository.save(history);
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("부서 엑셀 파일 처리 중 오류가 발생했습니다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 2. 사원 엑셀 업로드
+     * 형식:
+     * 1열: 사번
+     * 2열: 사원명
+     * 3열: 부서코드
+     * 4열: 부서명
+     * 5열: 입소일자
      */
     @Transactional
     public void importMembersByExcel(MultipartFile file) {
         try (InputStream is = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(is)) {
 
-            Sheet sheet = workbook.getSheetAt(0); // 첫 번째 시트 사용
-            log.info("시트의 마지막 row 줄 : " + sheet.getLastRowNum());
-            // 헤더(0번 Row)를 제외하고 1번 Row부터 읽기
-            for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+            Sheet sheet = workbook.getSheetAt(0);
+            log.info("시트의 마지막 row 줄 : {}", sheet.getLastRowNum());
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                final int rowIndex = i + 1; // 엑셀의 실제 행 번호 (1-based, 헤더 포함)
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
-                String memberCode = getCellValueAsString(row.getCell(0));
-                if (memberCode == null || memberCode.trim().isEmpty()) continue; // 고유번호가 없으면 건너뜀
+                String memberCode = getCellValueAsString(row.getCell(0)).trim();
+                if (memberCode.isEmpty()) continue;
 
-                String name = getCellValueAsString(row.getCell(1));
-                String deptCode = getCellValueAsString(row.getCell(2));
-                String deptName = getCellValueAsString(row.getCell(3));
+                String name = getCellValueAsString(row.getCell(1)).trim();
+                String deptCode = getCellValueAsString(row.getCell(2)).trim();
+                String deptName = getCellValueAsString(row.getCell(3)).trim();
+                LocalDate startDate = parseLocalDate(row.getCell(4));
 
-                LocalDate startDate = LocalDate.now(); // 기본값 현재 날짜
+                if (startDate == null) {
+                    throw new RuntimeException(rowIndex + "행의 입소일자가 올바르지 않습니다.");
+                }
 
-                // 날짜 컬럼 파싱 (인덱스 6)
-                Cell dateCell = row.getCell(7);
-                if (dateCell != null) {
-                    if (dateCell.getCellType() == CellType.NUMERIC) {
-                        if(DateUtil.isCellDateFormatted(dateCell)) {
-                            Date date = dateCell.getDateCellValue();
-                            if (date != null) {
-                                startDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-                            }
-                        } else {
-                            try {
-                                double excelDate = dateCell.getNumericCellValue();
-                                Date date = DateUtil.getJavaDate(excelDate);
-                                if (date != null) {
-                                    startDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-                                }
-                            } catch (Exception e) {
-                                // ignore
-                            }
-                        }
-                    } else if(dateCell.getCellType() == CellType.STRING) {
-                        String dateStr = dateCell.getStringCellValue();
-                        try {
-                            if (dateStr.matches("\\d+")) {
-                                double excelDate = Double.parseDouble(dateStr);
-                                Date date = DateUtil.getJavaDate(excelDate);
-                                if (date != null) {
-                                    startDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-                                }
-                            } else {
-                                // 엑셀에서 날짜 포맷이 'yyyy.MM.dd' 혹은 'yyyy/MM/dd' 등일 경우를 대비하여 하이픈으로 통일
-                                dateStr = dateStr.replace(".", "-").replace("/", "-");
-                                startDate = LocalDate.parse(dateStr);
-                            }
-                        } catch (Exception e) {
-                            // 날짜 파싱 실패 시 현재 날짜로 대체하거나 에러 처리
-                        }
+                Member member = memberRepository.findByMemberCode(memberCode)
+                        .orElseGet(() -> memberRepository.save(
+                                Member.builder()
+                                        .memberCode(memberCode)
+                                        .name(name)
+                                        .profileImagePath(null)
+                                        .build()
+                        ));
+
+                if (deptCode.isEmpty()) {
+                    continue;
+                }
+
+                Department department = departmentRepository.findByDeptCd(deptCode)
+                        .orElseThrow(() ->
+                                new RuntimeException(rowIndex + "행: 존재하지 않는 부서코드입니다. deptCode=" + deptCode));
+
+                // 선택 검증: 입소일 기준 부서코드에 대응하는 당시 부서명이 엑셀 값과 맞는지 확인
+                if (!deptName.isEmpty()) {
+                    List<String> deptNamesAtTime = departmentNameHistoryRepository
+                            .findDeptNameAtTime(department.getDepartmentId(), startDate);
+
+                    if (deptNamesAtTime.isEmpty()) {
+                        throw new RuntimeException(rowIndex + "행: " + startDate + " 기준 부서명 이력이 없습니다. deptCode=" + deptCode);
+                    }
+
+                    String actualDeptName = deptNamesAtTime.get(0);
+                    if (!actualDeptName.equals(deptName)) {
+                        throw new RuntimeException(rowIndex + "행: 부서코드와 부서명이 일치하지 않습니다. "
+                                + "[요청값=" + deptName + ", DB기준=" + actualDeptName + "]");
                     }
                 }
 
-                // 1. 사원 처리 (없으면 생성)
-                Member member = memberRepository.findByMemberCode(memberCode).orElse(null);
-                if (member == null) {
-                    member = Member.builder()
-                            .memberCode(memberCode)
-                            .name(name)
-                            .profileImagePath(null) // 엑셀 업로드 시 프로필 이미지는 기본 null
-                            .build();
-                    member = memberRepository.save(member);
+                boolean alreadyExists = historyRepository
+                        .findByMemberOrderByStartDateAscEndDateAsc(member)
+                        .stream()
+                        .anyMatch(history ->
+                                history.getDepartment().getDepartmentId().equals(department.getDepartmentId())
+                                        && history.getStartDate().equals(startDate)
+                        );
+
+                if (alreadyExists) {
+                    continue;
                 }
 
-                // 2. 부서 처리 (부서 코드로 조회, 없으면 생성)
-                if (deptCode != null && !deptCode.trim().isEmpty()) {
-                    Department department = departmentRepository.findByDeptCd(deptCode).orElse(null);
-                    if (department == null) {
-                        department = Department.builder()
-                                .deptCd(deptCode)
-                                .build();
-                        department = departmentRepository.save(department);
-                    }
+                MemberDepartmentHistory history = MemberDepartmentHistory.builder()
+                        .member(member)
+                        .department(department)
+                        .startDate(startDate)
+                        .build();
 
-                    // 부서명 이력 처리
-                    if (deptName != null && !deptName.trim().isEmpty()) {
-                        DepartmentNameHistory lastNameHistory = departmentNameHistoryRepository.findByDepartmentOrderByStartDateAsc(department)
-                                .stream().reduce((first, second) -> second).orElse(null);
-
-                        if (lastNameHistory == null || !lastNameHistory.getDeptName().equals(deptName)) {
-                            DepartmentNameHistory newNameHistory = DepartmentNameHistory.builder()
-                                    .department(department)
-                                    .deptName(deptName)
-                                    .startDate(startDate)
-                                    .build();
-                            departmentNameHistoryRepository.save(newNameHistory);
-                        }
-                    }
-
-                    // 3. 사원 부서 배치 이력 처리
-                    final Department finalDept = department;
-
-                    Optional<MemberDepartmentHistory> lastHistoryOpt = historyRepository.findTopByMemberOrderByStartDateDesc(member);
-                    boolean skipCurrentRow = false; // 현재 행을 건너뛸지 여부 플래그
-
-                    if (lastHistoryOpt.isPresent()) {
-                        MemberDepartmentHistory lastHistory = lastHistoryOpt.get();
-                        Long lastDeptId = lastHistory.getDepartment().getDepartmentId();
-                        List<String> lastDeptNames = departmentNameHistoryRepository.findDeptNameAtTime(lastDeptId, lastHistory.getStartDate());
-                        String lastDeptNameAtStart = lastDeptNames.isEmpty() ? lastHistory.getDepartment().getDeptCd() : lastDeptNames.get(0);
-
-                        List<String> newDeptNames = departmentNameHistoryRepository.findDeptNameAtTime(finalDept.getDepartmentId(), startDate);
-                        String newDeptNameAtStart = newDeptNames.isEmpty() ? finalDept.getDeptCd() : newDeptNames.get(0);
-
-                        // 현재 처리하려는 이력이 이전 이력과 완전히 동일한지 확인 (부서 ID, 부서명, 시작일 모두 동일)
-                        if (lastDeptId.equals(finalDept.getDepartmentId()) && lastDeptNameAtStart.equals(newDeptNameAtStart) && lastHistory.getStartDate().equals(startDate)) {
-                            skipCurrentRow = true; // 완전히 동일한 이력이 이미 존재하면, 이 행은 건너뜀
-                        }
-                    }
-
-                    if (skipCurrentRow) {
-                        continue; // 다음 엑셀 행으로 이동
-                    }
-
-                    // 새 부서 이력 저장
-                    MemberDepartmentHistory history = MemberDepartmentHistory.builder()
-                            .member(member)
-                            .department(finalDept)
-                            .startDate(startDate)
-                            .build();
-                    historyRepository.save(history);
-                }
+                historyRepository.save(history);
             }
+
         } catch (Exception e) {
-            throw new RuntimeException("엑셀 파일 처리 중 오류가 발생했습니다: " + e.getMessage(), e);
+            throw new RuntimeException("사원 엑셀 파일 처리 중 오류가 발생했습니다: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * 날짜 Cell 파싱
+     */
+    private LocalDate parseLocalDate(Cell cell) {
+        if (cell == null) return null;
+
+        try {
+            if (cell.getCellType() == CellType.NUMERIC) {
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    Date date = cell.getDateCellValue();
+                    return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                }
+
+                double excelDate = cell.getNumericCellValue();
+                Date date = DateUtil.getJavaDate(excelDate);
+                return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            }
+
+            if (cell.getCellType() == CellType.STRING) {
+                String dateStr = cell.getStringCellValue().trim();
+                if (dateStr.isEmpty()) return null;
+
+                if (dateStr.matches("\\d+")) {
+                    double excelDate = Double.parseDouble(dateStr);
+                    Date date = DateUtil.getJavaDate(excelDate);
+                    return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                }
+
+                dateStr = dateStr.replace(".", "-").replace("/", "-");
+                return LocalDate.parse(dateStr);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+
+        return null;
+    }
+
+
 
     /**
      * Cell의 값을 String으로 안전하게 변환합니다.
@@ -439,7 +498,6 @@ public class MemberService {
     @Transactional
     public void updateMember(Long memberId, MemberUpdateRequestDto request) {
         Member member = memberRepository.findById(memberId).orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
-        if (request.getMemberCode() != null) member.updateMemberCode(request.getMemberCode());
         if (request.getName() != null) member.updateName(request.getName());
         if (request.getProfileImagePath() != null) member.updateProfileImagePath(request.getProfileImagePath());
     }
