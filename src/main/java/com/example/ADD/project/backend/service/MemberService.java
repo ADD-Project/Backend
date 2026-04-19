@@ -214,15 +214,17 @@ public class MemberService {
      */
     @Transactional
     public void registerSingleMember(SingleMemberRegisterRequestDto request) {
-        // 이미 등록된 사원(memberCode)인지 확인 후 없으면 신규 저장, 있으면 기존 사원 객체 재사용
-        Member member = memberRepository.findByMemberCode(request.getMemberCode())
-                .orElseGet(() -> {
-                    Member newMember = Member.builder()
-                            .memberCode(request.getMemberCode())
-                            .name(request.getName())
-                            .build();
-                    return memberRepository.save(newMember);
-                });
+        // 이미 등록된 사원(memberCode)인지 확인 후 존재하면 예외 처리
+        memberRepository.findByMemberCode(request.getMemberCode()).ifPresent(existingMember -> {
+            throw new RuntimeException(existingMember.getName() + "의 고유번호로 사용되고 있는 값입니다.");
+        });
+
+        Member member = memberRepository.save(
+                Member.builder()
+                        .memberCode(request.getMemberCode())
+                        .name(request.getName())
+                        .build()
+        );
 
         // 사원의 모든 부서 이력을 리스트로 순회하며 한 번에 처리
         if (request.getHistories() != null && !request.getHistories().isEmpty()) {
