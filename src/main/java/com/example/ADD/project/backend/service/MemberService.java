@@ -52,7 +52,6 @@ public class MemberService {
             return MemberDetailResponseDto.builder()
                     .memberId(member.getMemberId())
                     .name(member.getName())
-                    .profileImagePath(member.getProfileImagePath())
                     .build();
         }
 
@@ -79,14 +78,12 @@ public class MemberService {
                         .memberId(c.getMemberId())
                         .memberCode(c.getMemberCode())
                         .name(c.getName())
-                        .profileImagePath(c.getProfileImagePath())
                         .build())
                 .collect(Collectors.toList());
 
         return MemberDetailResponseDto.builder()
                 .memberId(member.getMemberId())
                 .name(member.getName())
-                .profileImagePath(member.getProfileImagePath())
                 .joinDate(joinDate)
                 .joinDepartmentName(joinDeptName)
                 .joinDepartmentCode(joinDeptCode)
@@ -110,7 +107,6 @@ public class MemberService {
             return AdminMemberDetailResponseDto.builder()
                     .memberCode(member.getMemberCode())
                     .name(member.getName())
-                    .profileImagePath(member.getProfileImagePath())
                     .build();
         }
 
@@ -138,7 +134,6 @@ public class MemberService {
         return AdminMemberDetailResponseDto.builder()
                 .memberCode(member.getMemberCode())
                 .name(member.getName())
-                .profileImagePath(member.getProfileImagePath())
                 .joinDepartmentName(joinDeptName)
                 .joinDate(joinDate)
                 .departmentHistories(historyDtos)
@@ -210,7 +205,6 @@ public class MemberService {
                 .memberId(member.getMemberId())
                 .memberCode(member.getMemberCode())
                 .name(member.getName())
-                .profileImagePath(member.getProfileImagePath())
                 .joinDepartmentName(joinDeptName)
                 .admissionYear(admissionYear)
                 .build();
@@ -227,7 +221,6 @@ public class MemberService {
                     Member newMember = Member.builder()
                             .memberCode(request.getMemberCode())
                             .name(request.getName())
-                            .profileImagePath(request.getProfileImagePath()) 
                             .build();
                     return memberRepository.save(newMember);
                 });
@@ -379,7 +372,6 @@ public class MemberService {
                                 Member.builder()
                                         .memberCode(memberCode)
                                         .name(name)
-                                        .profileImagePath(null)
                                         .build()
                         ));
 
@@ -503,7 +495,6 @@ public class MemberService {
     public void updateMember(Long memberId, MemberUpdateRequestDto request) {
         Member member = memberRepository.findById(memberId).orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
         if (request.getName() != null) member.updateName(request.getName());
-        if (request.getProfileImagePath() != null) member.updateProfileImagePath(request.getProfileImagePath());
 
         // 부서 이력이 요청에 포함된 경우 기존 이력 전체 삭제 후 새로 동기화 (Full Sync)
         if (request.getHistories() != null) {

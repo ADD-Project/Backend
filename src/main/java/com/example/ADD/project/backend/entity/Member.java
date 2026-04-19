@@ -28,18 +28,14 @@ public class Member extends BaseTimeEntity {
     @Column(name = "name", nullable = false, length = 50)
     private String name;
 
-    @Column(name = "profile_image_path", length = 255)
-    private String profileImagePath;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 20)
     private Role role;
 
     @Builder
-    public Member(String memberCode, String name, String profileImagePath, Role role) {
+    public Member(String memberCode, String name, Role role) {
         this.memberCode = memberCode;
         this.name = name;
-        this.profileImagePath = profileImagePath;
         this.role = role != null ? role : Role.MEMBER;
     }
 
@@ -47,10 +43,6 @@ public class Member extends BaseTimeEntity {
         this.name = name;
     }
 
-    public void updateProfileImagePath(String profileImagePath) {
-        this.profileImagePath = profileImagePath;
-    }
-    
     public void updateMemberCode(String memberCode) {
         this.memberCode = memberCode;
     }

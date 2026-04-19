@@ -9,5 +9,4 @@ public class ColleagueDto {
     private Long memberId;
     private String memberCode;
     private String name;
-    private String profileImagePath;
 }

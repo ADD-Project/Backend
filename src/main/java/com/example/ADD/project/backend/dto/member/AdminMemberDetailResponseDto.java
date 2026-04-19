@@ -10,7 +10,6 @@ import java.util.List;
 public class AdminMemberDetailResponseDto {
     private String memberCode;
     private String name;
-    private String profileImagePath;
     private String joinDepartmentName;
     private LocalDate joinDate;
     private List<DepartmentHistoryDto> departmentHistories;

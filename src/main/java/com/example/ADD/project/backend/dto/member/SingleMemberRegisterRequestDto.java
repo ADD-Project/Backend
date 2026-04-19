@@ -7,6 +7,5 @@ import java.util.List;
 public class SingleMemberRegisterRequestDto {
     private String memberCode;
     private String name;
-    private String profileImagePath;
     private List<MemberDepartmentHistoryRequestDto> histories;
 }
