@@ -57,6 +57,14 @@ public class DepartmentNameHistory {
         this.createdAt = LocalDateTime.now();
     }
 
+    public void updateDeptName(String deptName) {
+        this.deptName = deptName;
+    }
+
+    public void updateStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
     public void updateEndDate(LocalDate endDate) {
         this.endDate = endDate;
     }

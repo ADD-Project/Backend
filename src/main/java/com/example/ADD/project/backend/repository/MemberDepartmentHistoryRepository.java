@@ -1,5 +1,6 @@
 package com.example.ADD.project.backend.repository;
 
+import com.example.ADD.project.backend.entity.Department;
 import com.example.ADD.project.backend.entity.Member;
 import com.example.ADD.project.backend.entity.MemberDepartmentHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,4 +34,6 @@ public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberD
     LocalDate findMaxAdmissionDate();
 
     Optional<MemberDepartmentHistory> findTopByMemberOrderByStartDateDesc(Member member);
+
+    List<MemberDepartmentHistory> findByDepartment(Department department);
 }

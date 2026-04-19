@@ -15,4 +15,5 @@ public class DepartmentResponseDto {
     private String deptCd;
     private String deptName;
     private LocalDate startDate;
+    private Long departmentNameHistoryId;
 }

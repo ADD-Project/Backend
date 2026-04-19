@@ -24,9 +24,9 @@ public class DepartmentController {
         return ApiResponse.success("200", "부서 생성 성공", null);
     }
 
-    @PutMapping("/departments/{departmentId}")
-    public ApiResponse<String> updateDepartment(@PathVariable Long departmentId, @RequestBody DepartmentRequestDto request) {
-        departmentService.updateDepartment(departmentId, request);
+    @PutMapping("/departments/{departmentNameHistoryId}")
+    public ApiResponse<String> updateDepartmentHistory(@PathVariable Long departmentNameHistoryId, @RequestBody DepartmentRequestDto request) {
+        departmentService.updateDepartmentHistory(departmentNameHistoryId, request);
         return ApiResponse.success("200", "부서 수정 성공", null);
     }
 
@@ -35,10 +35,10 @@ public class DepartmentController {
         return ApiResponse.success("200", "부서 조회 성공", departmentService.getAllDepartments());
     }
 
-    @DeleteMapping("/departments/{departmentId}")
-    public ApiResponse<String> deleteDepartment(@PathVariable Long departmentId) {
-        departmentService.deleteDepartment(departmentId);
-        return ApiResponse.success("200", "부서 삭제 성공", null);
+    @DeleteMapping("/departments/{departmentNameHistoryId}")
+    public ApiResponse<String> deleteDepartmentHistory(@PathVariable Long departmentNameHistoryId) {
+        departmentService.deleteDepartmentHistory(departmentNameHistoryId);
+        return ApiResponse.success("200", "부서 이력 삭제 성공", null);
     }
 
     @PostMapping("/departments/excel")
