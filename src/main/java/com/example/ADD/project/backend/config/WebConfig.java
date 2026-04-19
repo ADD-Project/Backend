@@ -1,19 +1,17 @@
 package com.example.ADD.project.backend.config;
 
-import com.example.ADD.project.backend.interceptor.AdminCheckInterceptor;
-import com.example.ADD.project.backend.interceptor.MemberCheckInterceptor;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
     @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        // 관리자 권한 체크 인터셉터 (예: /admin/** 경로는 모두 관리자만 접근 가능)
-        registry.addInterceptor(new AdminCheckInterceptor())
-                .addPathPatterns("/admin/**")
-                .excludePathPatterns("/admin/login"); // 로그인 API는 제외
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // 브라우저에서 /images/... 로 요청이 오면
+        // 애플리케이션(jar)이 실행되는 현재 디렉토리(./)의 images 폴더 안에서 파일을 찾아서 반환합니다.
+        registry.addResourceHandler("/images/**")
+                .addResourceLocations("file:./images/");
     }
 }
