@@ -2,7 +2,6 @@ package com.example.ADD.project.backend.service;
 
 import com.example.ADD.project.backend.dto.member.*;
 import com.example.ADD.project.backend.entity.Department;
-import com.example.ADD.project.backend.entity.DepartmentNameHistory;
 import com.example.ADD.project.backend.entity.Member;
 import com.example.ADD.project.backend.entity.MemberDepartmentHistory;
 import com.example.ADD.project.backend.repository.DepartmentNameHistoryRepository;
@@ -23,6 +22,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -237,7 +237,8 @@ public class MemberService {
                 LocalDate startDate = histReq.getStartDate() != null ? histReq.getStartDate() : LocalDate.now();
 
                 // 2. 부서명 시점 검증 (사이드이펙트 방지: 부서명을 마음대로 생성하지 않고 예외처리)
-                if (histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
+                // 부서명 공백 보존
+                if (histReq.getDeptName() != null && !histReq.getDeptName().isEmpty()) {
                     List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
                     
                     if (deptNamesAtTime.isEmpty()) {
@@ -272,79 +273,17 @@ public class MemberService {
     }
 
     /**
-     * 1. 부서 엑셀 업로드
-     * 형식:
-     * 1열: 부서코드
-     * 2열: 부서명
-     * 3열: 시작일
-     */
-    @Transactional
-    public void importDepartmentsByExcel(MultipartFile file) {
-        try (InputStream is = file.getInputStream();
-             Workbook workbook = WorkbookFactory.create(is)) {
-
-            Sheet sheet = workbook.getSheetAt(0);
-
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                int rowIndex = i + 1; // 엑셀의 실제 행 번호 (1-based, 헤더 포함)
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
-
-                String deptCode = getCellValueAsString(row.getCell(0)).trim();
-                String deptName = getCellValueAsString(row.getCell(1)).trim();
-                LocalDate startDate = parseLocalDate(row.getCell(2));
-
-                if (deptCode.isEmpty() || deptName.isEmpty()) {
-                    throw new RuntimeException(rowIndex + "행: 부서코드와 부서명은 필수입니다.");
-                }
-                if (startDate == null) {
-                    throw new RuntimeException(rowIndex + "행: 시작일이 올바르지 않습니다.");
-                }
-
-                Department department = departmentRepository.findByDeptCd(deptCode)
-                        .orElseGet(() -> departmentRepository.save(
-                                Department.builder()
-                                        .deptCd(deptCode)
-                                        .build()
-                        ));
-
-                boolean alreadyExists = departmentNameHistoryRepository
-                        .findByDepartmentOrderByStartDateAsc(department)
-                        .stream()
-                        .anyMatch(history ->
-                                history.getDeptName().equals(deptName)
-                                        && history.getStartDate().equals(startDate)
-                        );
-
-                if (alreadyExists) {
-                    continue;
-                }
-
-                DepartmentNameHistory history = DepartmentNameHistory.builder()
-                        .department(department)
-                        .deptName(deptName)
-                        .startDate(startDate)
-                        .build();
-
-                departmentNameHistoryRepository.save(history);
-            }
-
-        } catch (Exception e) {
-            throw new RuntimeException("부서 엑셀 파일 처리 중 오류가 발생했습니다: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * 2. 사원 엑셀 업로드
      * 형식:
-     * 1열: 사번
-     * 2열: 사원명
-     * 3열: 부서코드
-     * 4열: 부서명
-     * 5열: 입소일자
+     * 1열: 고유번호
+     * 2열: 성명
+     * 3열: 당시운영부서코드
+     * 4열: 당시운영부서명
+     * 5열: 시작일
      */
     @Transactional
     public void importMembersByExcel(MultipartFile file) {
+        System.out.println("=== importMembersByFile controller 진입 ===");
         try (InputStream is = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(is)) {
 
@@ -356,16 +295,27 @@ public class MemberService {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
-                String memberCode = getCellValueAsString(row.getCell(0)).trim();
-                if (memberCode.isEmpty()) continue;
+                // 행에서 유효한 데이터를 담을 리스트 (빈 셀이나 숨긴 열 무시를 위해)
+                List<String> rowData = new java.util.ArrayList<>();
+                for (int j = 0; j < Math.max(10, row.getLastCellNum()); j++) {
+                    String val = getCellValueAsString(row.getCell(j));
+                    if (!val.trim().isEmpty()) {
+                        rowData.add(val);
+                    }
+                }
 
-                String name = getCellValueAsString(row.getCell(1)).trim();
-                String deptCode = getCellValueAsString(row.getCell(2)).trim();
-                String deptName = getCellValueAsString(row.getCell(3)).trim();
-                LocalDate startDate = parseLocalDate(row.getCell(4));
+                // 데이터가 5개 이상 채워진 행만 유효한 데이터로 간주
+                if (rowData.size() < 5) continue;
+
+                String memberCode = rowData.get(0).trim();
+                String name = rowData.get(1).trim();
+                String deptCode = rowData.get(2).trim();
+                String rawDateStr = rowData.get(4).trim();
+                
+                LocalDate startDate = parseLocalDateFromString(rawDateStr);
 
                 if (startDate == null) {
-                    throw new RuntimeException(rowIndex + "행의 입소일자가 올바르지 않습니다.");
+                    throw new RuntimeException(rowIndex + "행의 입소일자가 올바르지 않습니다. (원본 데이터: '" + rawDateStr + "')");
                 }
 
                 Member member = memberRepository.findByMemberCode(memberCode)
@@ -384,34 +334,24 @@ public class MemberService {
                         .orElseThrow(() ->
                                 new RuntimeException(rowIndex + "행: 존재하지 않는 부서코드입니다. deptCode=" + deptCode));
 
-                // 선택 검증: 입소일 기준 부서코드에 대응하는 당시 부서명이 엑셀 값과 맞는지 확인
-                if (!deptName.isEmpty()) {
-                    List<String> deptNamesAtTime = departmentNameHistoryRepository
-                            .findDeptNameAtTime(department.getDepartmentId(), startDate);
-
-                    if (deptNamesAtTime.isEmpty()) {
-                        throw new RuntimeException(rowIndex + "행: " + startDate + " 기준 부서명 이력이 없습니다. deptCode=" + deptCode);
-                    }
-
-                    String actualDeptName = deptNamesAtTime.get(0);
-                    if (!actualDeptName.equals(deptName)) {
-                        throw new RuntimeException(rowIndex + "행: 부서코드와 부서명이 일치하지 않습니다. "
-                                + "[요청값=" + deptName + ", DB기준=" + actualDeptName + "]");
-                    }
-                }
-
-                boolean alreadyExists = historyRepository
+                // 요구사항: 엑셀 파일에 동일한 사원에 대해 '동일한 날짜'로 입소한 부서 이력이 여러 개 있다면,
+                // 맨 아래에 나온 이력만 DB에 저장되도록 한다. 
+                // 위에서 아래로 처리하므로 동일한 날짜의 이력이 발견되면 기존 것을 삭제하고 현재 행의 데이터로 새로 저장한다.
+                Optional<MemberDepartmentHistory> existingHistoryOpt = historyRepository
                         .findByMemberOrderByStartDateAscEndDateAsc(member)
                         .stream()
-                        .anyMatch(history ->
-                                history.getDepartment().getDepartmentId().equals(department.getDepartmentId())
-                                        && history.getStartDate().equals(startDate)
-                        );
+                        .filter(history -> history.getStartDate().equals(startDate))
+                        .findFirst();
 
-                if (alreadyExists) {
-                    continue;
+                if (existingHistoryOpt.isPresent()) {
+                    // 동일한 날짜의 이력이 있으면 기존 이력을 삭제하고 새로 덮어쓰거나, 
+                    // 부서만 업데이트할 수 있으나 구조상 삭제 후 저장이 안전할 수 있습니다.
+                    // 여기서는 기존 이력을 지우고 새로 저장하는 방식으로 '가장 마지막 데이터'만 남도록 처리합니다.
+                    historyRepository.delete(existingHistoryOpt.get());
+                    historyRepository.flush(); // 즉시 삭제 반영
                 }
 
+                // 새 이력 저장
                 MemberDepartmentHistory history = MemberDepartmentHistory.builder()
                         .member(member)
                         .department(department)
@@ -427,69 +367,74 @@ public class MemberService {
     }
 
     /**
-     * 날짜 Cell 파싱
+     * 문자열 기반의 날짜 파싱 ("1974.2.1" 등 대응)
      */
-    private LocalDate parseLocalDate(Cell cell) {
-        if (cell == null) return null;
+    private LocalDate parseLocalDateFromString(String dateStr) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return null;
+        }
 
-        try {
-            if (cell.getCellType() == CellType.NUMERIC) {
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    Date date = cell.getDateCellValue();
-                    return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-                }
-
-                double excelDate = cell.getNumericCellValue();
+        dateStr = dateStr.trim();
+        
+        // 날짜가 숫자로만 되어있을 경우 (엑셀 날짜 일련번호)
+        if (dateStr.matches("\\d+")) {
+            try {
+                double excelDate = Double.parseDouble(dateStr);
                 Date date = DateUtil.getJavaDate(excelDate);
                 return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            } catch (Exception e) {
+                return null;
             }
+        }
 
-            if (cell.getCellType() == CellType.STRING) {
-                String dateStr = cell.getStringCellValue().trim();
-                if (dateStr.isEmpty()) return null;
+        // 구분자가 온점(.) 혹은 슬래시(/)인 경우 하이픈(-)으로 통일
+        dateStr = dateStr.replaceAll("\\s+", "").replace(".", "-").replace("/", "-");
+        
+        // 간혹 "1974-2-1-" 처럼 끝에 쓰레기값이 붙는 경우 제거
+        if (dateStr.endsWith("-")) {
+            dateStr = dateStr.substring(0, dateStr.length() - 1);
+        }
 
-                if (dateStr.matches("\\d+")) {
-                    double excelDate = Double.parseDouble(dateStr);
-                    Date date = DateUtil.getJavaDate(excelDate);
-                    return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-                }
-
-                dateStr = dateStr.replace(".", "-").replace("/", "-");
-                return LocalDate.parse(dateStr);
+        String[] parts = dateStr.split("-");
+        if (parts.length >= 3) {
+            // 숫자 외의 문자가 섞여 있다면 제거
+            String year = parts[0].replaceAll("[^0-9]", "");
+            String month = parts[1].replaceAll("[^0-9]", "");
+            String day = parts[2].replaceAll("[^0-9]", "");
+            
+            // 연도가 2자리인 경우 4자리로 추정 (예: 99 -> 1999, 21 -> 2021)
+            if (year.length() == 2) {
+                int y = Integer.parseInt(year);
+                year = (y >= 50 ? "19" : "20") + year;
             }
-        } catch (Exception e) {
-            return null;
+            
+            // 월과 일이 한자리인 경우 앞에 0을 붙여줌
+            if (month.length() == 1) {
+                month = "0" + month;
+            }
+            if (day.length() == 1) {
+                day = "0" + day;
+            }
+            
+            try {
+                return LocalDate.parse(year + "-" + month + "-" + day);
+            } catch (Exception e) {
+                return null;
+            }
         }
 
         return null;
     }
-
-
 
     /**
      * Cell의 값을 String으로 안전하게 변환합니다.
      */
     private String getCellValueAsString(Cell cell) {
         if (cell == null) return "";
-        switch (cell.getCellType()) {
-            case STRING:
-                return cell.getStringCellValue();
-            case NUMERIC:
-                // 일반 숫자는 String으로 변환 (사번 등이 숫자일 경우를 대비해 long 캐스팅)
-                double value = cell.getNumericCellValue();
-                if(value == (long) value) {
-                    return String.valueOf((long) value);
-                }
-                return String.valueOf(value);
-            case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
-            case FORMULA: // 수식 셀의 경우 계산된 값을 가져옴
-                Workbook workbook = cell.getSheet().getWorkbook();
-                FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-                return getCellValueAsString(evaluator.evaluateInCell(cell));
-            default:
-                return "";
-        }
+        // DataFormatter를 사용하면 엑셀의 "보이는" 값 그대로를 가져옵니다.
+        DataFormatter formatter = new DataFormatter();
+        String val = formatter.formatCellValue(cell);
+        return val != null ? val : "";
     }
 
     @Transactional
@@ -513,7 +458,7 @@ public class MemberService {
                 LocalDate startDate = histReq.getStartDate() != null ? histReq.getStartDate() : LocalDate.now();
 
                 // 2. 부서명 시점 검증 (사이드이펙트 방지: 부서명을 마음대로 생성하지 않고 예외처리)
-                if (histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
+                if (histReq.getDeptName() != null && !histReq.getDeptName().isEmpty()) {
                     List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
 
                     if (deptNamesAtTime.isEmpty()) {

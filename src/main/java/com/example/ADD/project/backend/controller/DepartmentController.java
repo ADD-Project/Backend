@@ -4,7 +4,6 @@ import com.example.ADD.project.backend.dto.department.DepartmentRequestDto;
 import com.example.ADD.project.backend.dto.department.DepartmentResponseDto;
 import com.example.ADD.project.backend.dto.ApiResponse;
 import com.example.ADD.project.backend.service.DepartmentService;
-import com.example.ADD.project.backend.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,7 +15,6 @@ import java.util.List;
 public class DepartmentController {
 
     private final DepartmentService departmentService;
-    private final MemberService memberService;
 
     @PostMapping("/departments")
     public ApiResponse<String> createDepartment(@RequestBody DepartmentRequestDto request) {
@@ -44,7 +42,7 @@ public class DepartmentController {
     @PostMapping("/departments/excel")
     public ApiResponse<String> uploadDepartmentsExcel(@RequestParam("file") MultipartFile file) {
         try {
-            memberService.importDepartmentsByExcel(file);
+            departmentService.importDepartmentsByExcel(file);
             return ApiResponse.success("200", "부서 엑셀 업로드 성공", null);
         } catch (Exception e) {
             return ApiResponse.error("400", e.getMessage());

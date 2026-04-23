@@ -38,9 +38,6 @@ public class DepartmentNameHistory {
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
-    @Column(name = "end_date")
-    private LocalDate endDate;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -49,7 +46,6 @@ public class DepartmentNameHistory {
         this.department = department;
         this.deptName = deptName;
         this.startDate = startDate;
-        this.endDate = endDate;
     }
 
     @PrePersist
@@ -63,9 +59,5 @@ public class DepartmentNameHistory {
 
     public void updateStartDate(LocalDate startDate) {
         this.startDate = startDate;
-    }
-
-    public void updateEndDate(LocalDate endDate) {
-        this.endDate = endDate;
     }
 }
