@@ -2,6 +2,7 @@ package com.example.ADD.project.backend.service;
 
 import com.example.ADD.project.backend.dto.member.*;
 import com.example.ADD.project.backend.entity.Department;
+import com.example.ADD.project.backend.entity.DepartmentNameHistory;
 import com.example.ADD.project.backend.entity.Member;
 import com.example.ADD.project.backend.entity.MemberDepartmentHistory;
 import com.example.ADD.project.backend.repository.DepartmentNameHistoryRepository;
@@ -239,8 +240,16 @@ public class MemberService {
                 } else if (histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
                     // 부서명 검증 시 띄어쓰기를 모두 없앤 후 비교 (DB에도 띄어쓰기 없는 상태로 저장됨)
                     String normalizedDeptName = histReq.getDeptName().replaceAll("\\s+", "");
-                    dept = departmentNameHistoryRepository.findDepartmentByNameAtTime(normalizedDeptName, startDate)
-                            .orElseThrow(() -> new RuntimeException("해당 일자(" + startDate + ") 기준 해당 부서명을 가진 부서를 찾을 수 없습니다: " + histReq.getDeptName()));
+                    Optional<DepartmentNameHistory> nameHistoryOpt = departmentNameHistoryRepository
+                            .findFirstByDeptNameAndStartDateLessThanEqualOrderByStartDateDesc(normalizedDeptName, startDate);
+                    
+                    // 만약 특정 시점에 해당하는 게 없으면 가장 예전 이력을 가져오거나, 이름으로 찾을 수 있는 첫 번째 이력을 찾음
+                    if (nameHistoryOpt.isEmpty()) {
+                        nameHistoryOpt = departmentNameHistoryRepository.findFirstByDeptNameOrderByStartDateAsc(normalizedDeptName);
+                    }
+                    
+                    dept = nameHistoryOpt.map(DepartmentNameHistory::getDepartment)
+                            .orElseThrow(() -> new RuntimeException("해당 일자(" + startDate + ") 기준 해당 부서명(" + histReq.getDeptName() + ")을 가진 부서를 찾을 수 없습니다."));
                 } else {
                     throw new RuntimeException("부서코드나 부서명 중 하나는 필수입니다.");
                 }
@@ -250,11 +259,20 @@ public class MemberService {
                     histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
                     
                     List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
+                    
+                    String actualDeptName = "";
                     if (deptNamesAtTime.isEmpty()) {
-                        throw new RuntimeException(startDate + " 기준 부서명 이력이 없습니다. 부서코드: " + dept.getDeptCd());
+                        // 해당 시점의 이력이 없다면, 최초 이력을 가져와서 비교
+                        Optional<DepartmentNameHistory> firstHistory = departmentNameHistoryRepository.findFirstByDepartmentOrderByStartDateAsc(dept);
+                        if (firstHistory.isPresent()) {
+                            actualDeptName = firstHistory.get().getDeptName();
+                        } else {
+                            throw new RuntimeException(startDate + " 기준 부서명 이력이 없습니다. 부서코드: " + dept.getDeptCd());
+                        }
+                    } else {
+                        actualDeptName = deptNamesAtTime.get(0);
                     }
                     
-                    String actualDeptName = deptNamesAtTime.get(0);
                     String normalizedReqDeptName = histReq.getDeptName().replaceAll("\\s+", "");
                     if (!actualDeptName.equals(normalizedReqDeptName)) {
                         throw new RuntimeException("입력한 부서명과 해당 일자의 실제 부서명이 일치하지 않습니다. "
@@ -364,11 +382,18 @@ public class MemberService {
                             List<String> deptNamesAtTime = departmentNameHistoryRepository
                                     .findDeptNameAtTime(department.getDepartmentId(), startDate);
 
+                            String actualDeptName = "";
                             if (deptNamesAtTime.isEmpty()) {
-                                throw new RuntimeException(rowIndex + "행: " + startDate + " 기준 부서명 이력이 없습니다. deptCode=" + deptCode);
+                                Optional<DepartmentNameHistory> firstHistory = departmentNameHistoryRepository.findFirstByDepartmentOrderByStartDateAsc(department);
+                                if (firstHistory.isPresent()) {
+                                    actualDeptName = firstHistory.get().getDeptName();
+                                } else {
+                                    throw new RuntimeException(rowIndex + "행: " + startDate + " 기준 부서명 이력이 없습니다. deptCode=" + deptCode);
+                                }
+                            } else {
+                                actualDeptName = deptNamesAtTime.get(0);
                             }
 
-                            String actualDeptName = deptNamesAtTime.get(0);
                             // 검증 시에도 띄어쓰기를 모두 없앤 후 비교합니다.
                             String normalizedReqDeptName = deptName.replaceAll("\\s+", "");
                             if (!actualDeptName.equals(normalizedReqDeptName)) {
@@ -376,12 +401,25 @@ public class MemberService {
                                         + "[요청값=" + deptName + ", DB기준=" + actualDeptName + "]");
                             }
                         }
-                    } else {
-                        // 2순위: 부서 코드가 비어있고 부서명만 있는 경우 -> 부서명 이력을 이용해 해당 시점의 부서를 역추적
+                    } else { // 2순위: 부서 코드가 비어있고 부서명만 있는 경우
                         String normalizedDeptName = deptName.replaceAll("\\s+", "");
-                        department = departmentNameHistoryRepository.findDepartmentByNameAtTime(normalizedDeptName, startDate)
-                                .orElseThrow(() -> new RuntimeException(rowIndex + "행: 해당 일자(" + startDate + ") 기준 부서명(" + deptName + ")을 가진 부서를 찾을 수 없습니다."));
-                    }
+                        Optional<DepartmentNameHistory> nameHistoryOpt = departmentNameHistoryRepository
+                                .findFirstByDeptNameAndStartDateLessThanEqualOrderByStartDateDesc(normalizedDeptName, startDate);
+
+                        if (nameHistoryOpt.isEmpty()) {
+                            nameHistoryOpt = departmentNameHistoryRepository.findFirstByDeptNameOrderByStartDateAsc(normalizedDeptName);
+                        }
+
+                        Optional<Department> departmentOpt = nameHistoryOpt.map(DepartmentNameHistory::getDepartment);
+
+                        // 부서명으로도 부서를 찾지 못했다면, 로그를 남기고 다음 행으로 넘어감
+                        if (departmentOpt.isEmpty()) {
+                            log.warn("{}행: 부서명 '{}'에 해당하는 부서를 찾을 수 없어 이력 추가를 건너뜁니다.", rowIndex, deptName);
+                            continue; // 에러를 발생시키지 않고 다음 행으로 넘어갑니다.
+                        }
+
+                        department = departmentOpt.get();
+                }
 
                     // 요구사항: 엑셀 파일에 동일한 사원에 대해 '동일한 날짜'로 입소한 부서 이력이 여러 개 있다면,
                     // 맨 아래에 나온 이력만 DB에 저장되도록 한다. 
@@ -528,11 +566,19 @@ public class MemberService {
                 if (histReq.getDeptName() != null && !histReq.getDeptName().isEmpty()) {
                     List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
 
+                    String actualDeptName = "";
                     if (deptNamesAtTime.isEmpty()) {
-                        throw new RuntimeException(startDate + " 기준 부서명 이력이 없습니다. 부서코드: " + dept.getDeptCd());
+                        // 해당 시점의 이력이 없다면, 최초 이력을 가져와서 비교
+                        Optional<DepartmentNameHistory> firstHistory = departmentNameHistoryRepository.findFirstByDepartmentOrderByStartDateAsc(dept);
+                        if (firstHistory.isPresent()) {
+                            actualDeptName = firstHistory.get().getDeptName();
+                        } else {
+                            throw new RuntimeException(startDate + " 기준 부서명 이력이 없습니다. 부서코드: " + dept.getDeptCd());
+                        }
+                    } else {
+                        actualDeptName = deptNamesAtTime.get(0);
                     }
 
-                    String actualDeptName = deptNamesAtTime.get(0);
                     // 검증 시에도 띄어쓰기를 모두 없앤 후 비교
                     String normalizedReqDeptName = histReq.getDeptName().replaceAll("\\s+", "");
                     if (!actualDeptName.equals(normalizedReqDeptName)) {
