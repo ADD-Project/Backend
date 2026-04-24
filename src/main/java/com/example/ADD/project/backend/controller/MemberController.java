@@ -6,6 +6,7 @@ import com.example.ADD.project.backend.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,12 +24,13 @@ public class MemberController {
     }
 
     @PostMapping("/admin/import/files")
-    public ApiResponse<String> importMembersByFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<ApiResponse<String>> importMembersByFile(@RequestParam("file") MultipartFile file) {
         try {
             memberService.importMembersByExcel(file);
-            return ApiResponse.success("200", "엑셀 업로드 성공", null);
+            return ResponseEntity.ok(ApiResponse.success("200", "엑셀 업로드 성공", null));
         } catch (Exception e) {
-            return ApiResponse.error("400", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("400", e.getMessage()));
         }
     }
 

@@ -35,5 +35,10 @@ public interface MemberDepartmentHistoryRepository extends JpaRepository<MemberD
 
     Optional<MemberDepartmentHistory> findTopByMemberOrderByStartDateDesc(Member member);
 
+    Optional<MemberDepartmentHistory> findByMemberAndStartDate(
+            Member member,
+            LocalDate startDate
+    );
+
     List<MemberDepartmentHistory> findByDepartment(Department department);
 }
