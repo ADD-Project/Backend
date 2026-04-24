@@ -298,39 +298,39 @@ public class MemberService {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
-                List<String> rowData = new ArrayList<>();
+                /*
+                 * 중요:
+                 * 빈 셀을 건너뛰면서 rowData.add() 하면
+                 * 부서코드가 비어 있는 경우 컬럼이 한 칸씩 밀린다.
+                 *
+                 * 따라서 사번, 사원명, 부서코드, 부서이름, 시작일을
+                 * 고정 컬럼 인덱스로 직접 읽는다.
+                 */
+                String memberCode = getCellValueAsString(row.getCell(0)).trim();
+                String name = getCellValueAsString(row.getCell(1)).trim();
+                String deptCode = getCellValueAsString(row.getCell(2)).trim();
+                String deptName = getCellValueAsString(row.getCell(3)).replaceAll("\\s+", "");
+                String rawDateStr;
 
-                for (int j = 0; j < Math.max(10, row.getLastCellNum()); j++) {
-                    Cell cell = row.getCell(j);
-                    String val;
+                Cell startDateCell = row.getCell(4);
+                if (startDateCell != null
+                        && startDateCell.getCellType() == CellType.NUMERIC
+                        && DateUtil.isCellDateFormatted(startDateCell)) {
 
-                    if (cell != null
-                            && cell.getCellType() == CellType.NUMERIC
-                            && DateUtil.isCellDateFormatted(cell)) {
-
-                        Date date = cell.getDateCellValue();
-                        LocalDate ld = date.toInstant()
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate();
-                        val = ld.toString();
-                    } else {
-                        val = getCellValueAsString(cell);
-                    }
-
-                    if (!val.trim().isEmpty()) {
-                        rowData.add(val.trim());
-                    }
+                    Date date = startDateCell.getDateCellValue();
+                    rawDateStr = date.toInstant()
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDate()
+                            .toString();
+                } else {
+                    rawDateStr = getCellValueAsString(startDateCell).trim();
                 }
 
-                if (rowData.size() < 5) continue;
-
-                String memberCode = rowData.get(0).trim();
-                if (memberCode.isEmpty()) continue;
-
-                String name = rowData.get(1).trim();
-                String deptCode = rowData.get(2).trim();
-                String deptName = rowData.get(3).replaceAll("\\s+", "");
-                String rawDateStr = rowData.get(4).trim();
+                // 부서코드는 없어도 허용한다.
+                // 사번, 사원명, 부서이름, 시작일은 필수값으로 본다.
+                if (memberCode.isEmpty() || name.isEmpty() || deptName.isEmpty() || rawDateStr.isEmpty()) {
+                    continue;
+                }
 
                 LocalDate startDate = parseLocalDateFromString(rawDateStr);
 
@@ -383,7 +383,15 @@ public class MemberService {
     }
 
     private Department resolveDepartmentForMemberExcelRow(ExcelMemberRow row) {
-        // 1. 부서코드가 있는 경우
+        /*
+         * 1. 부서코드가 있는 경우
+         *
+         * 규칙:
+         * - 부서코드와 동일한 부서가 부서 테이블에 있는지 확인
+         * - 있으면 시작일 기준 가장 최근 부서이름 이력 확인
+         * - 부서이름이 같으면 그대로 사원 이력 저장
+         * - 부서이름이 다르면 새로운 부서이름 이력 생성
+         */
         if (!row.deptCode.isEmpty()) {
             Department department = departmentRepository.findByDeptCd(row.deptCode)
                     .orElseGet(() -> departmentRepository.save(
@@ -399,8 +407,6 @@ public class MemberService {
                             .reduce((prev, curr) -> curr)
                             .orElse(null);
 
-            // 시작일 이전 또는 같은 날짜의 부서명 이력이 없거나,
-            // 가장 최근 부서명이 엑셀 부서명과 다르면 새 부서명 이력 생성
             if (latestBeforeOrAtStartDate == null
                     || !latestBeforeOrAtStartDate.getDeptName().equals(row.deptName)) {
 
@@ -416,14 +422,25 @@ public class MemberService {
             return department;
         }
 
-        // 2. 부서코드가 없는 경우: 부서이름 기준으로 찾기
+        /*
+         * 2. 부서코드가 없는 경우
+         *
+         * 규칙:
+         * - 부서이름 기준으로 부서이름 이력 테이블에서 찾음
+         * - 시작일보다 이전 또는 같은 날짜의 같은 부서이름 이력이 있으면
+         *   그중 가장 최근 이력의 부서에 저장
+         * - 이전 이력이 없고 이후 이력이 있으면
+         *   이후 이력의 시작일을 현재 시작일로 당김
+         * - 같은 부서이름이 아예 없으면
+         *   새 부서 + 새 부서이름 이력 생성
+         */
         List<DepartmentNameHistory> sameNameHistories =
                 departmentNameHistoryRepository.findAll()
                         .stream()
                         .filter(history -> history.getDeptName().equals(row.deptName))
+                        .sorted(Comparator.comparing(DepartmentNameHistory::getStartDate))
                         .collect(Collectors.toList());
 
-        // 2-1. 같은 부서이름 중 시작일보다 이전/같은 이력이 있으면 가장 최근 이력의 부서 사용
         DepartmentNameHistory latestSameNameBeforeOrAtStartDate =
                 sameNameHistories.stream()
                         .filter(history -> !history.getStartDate().isAfter(row.startDate))
@@ -434,7 +451,6 @@ public class MemberService {
             return latestSameNameBeforeOrAtStartDate.getDepartment();
         }
 
-        // 2-2. 이전 이력이 없고, 이후 이력이 있으면 그 이력의 시작일을 현재 시작일로 수정
         DepartmentNameHistory earliestSameNameAfterStartDate =
                 sameNameHistories.stream()
                         .filter(history -> history.getStartDate().isAfter(row.startDate))
@@ -446,7 +462,6 @@ public class MemberService {
             return earliestSameNameAfterStartDate.getDepartment();
         }
 
-        // 2-3. 같은 부서이름이 아예 없으면 새 부서 + 새 부서명 이력 생성
         Department department = departmentRepository.save(
                 Department.builder()
                         .deptCd("RANDOM_" + UUID.randomUUID().toString().substring(0, 4).toUpperCase())
