@@ -229,42 +229,56 @@ public class MemberService {
         // 사원의 모든 부서 이력을 리스트로 순회하며 한 번에 처리
         if (request.getHistories() != null && !request.getHistories().isEmpty()) {
             for (MemberDepartmentHistoryRequestDto histReq : request.getHistories()) {
-                
-                // 1. 부서 검증 (deptCode 기준)
-                Department dept = departmentRepository.findByDeptCd(histReq.getDeptCode())
-                        .orElseThrow(() -> new RuntimeException("존재하지 않는 부서코드입니다: " + histReq.getDeptCode()));
-
                 LocalDate startDate = histReq.getStartDate() != null ? histReq.getStartDate() : LocalDate.now();
+                Department dept = null;
+
+                // 1. 부서 검증 (deptCode가 있으면 deptCode 우선, 없으면 deptName으로 찾기)
+                if (histReq.getDeptCode() != null && !histReq.getDeptCode().trim().isEmpty()) {
+                    dept = departmentRepository.findByDeptCd(histReq.getDeptCode())
+                            .orElseThrow(() -> new RuntimeException("존재하지 않는 부서코드입니다: " + histReq.getDeptCode()));
+                } else if (histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
+                    // 부서명 검증 시 띄어쓰기를 모두 없앤 후 비교 (DB에도 띄어쓰기 없는 상태로 저장됨)
+                    String normalizedDeptName = histReq.getDeptName().replaceAll("\\s+", "");
+                    dept = departmentNameHistoryRepository.findDepartmentByNameAtTime(normalizedDeptName, startDate)
+                            .orElseThrow(() -> new RuntimeException("해당 일자(" + startDate + ") 기준 해당 부서명을 가진 부서를 찾을 수 없습니다: " + histReq.getDeptName()));
+                } else {
+                    throw new RuntimeException("부서코드나 부서명 중 하나는 필수입니다.");
+                }
 
                 // 2. 부서명 시점 검증 (사이드이펙트 방지: 부서명을 마음대로 생성하지 않고 예외처리)
-                // 부서명 공백 보존
-                if (histReq.getDeptName() != null && !histReq.getDeptName().isEmpty()) {
-                    List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
+                if (histReq.getDeptCode() != null && !histReq.getDeptCode().trim().isEmpty() &&
+                    histReq.getDeptName() != null && !histReq.getDeptName().trim().isEmpty()) {
                     
+                    List<String> deptNamesAtTime = departmentNameHistoryRepository.findDeptNameAtTime(dept.getDepartmentId(), startDate);
                     if (deptNamesAtTime.isEmpty()) {
                         throw new RuntimeException(startDate + " 기준 부서명 이력이 없습니다. 부서코드: " + dept.getDeptCd());
                     }
                     
                     String actualDeptName = deptNamesAtTime.get(0);
-                    if (!actualDeptName.equals(histReq.getDeptName())) {
+                    String normalizedReqDeptName = histReq.getDeptName().replaceAll("\\s+", "");
+                    if (!actualDeptName.equals(normalizedReqDeptName)) {
                         throw new RuntimeException("입력한 부서명과 해당 일자의 실제 부서명이 일치하지 않습니다. "
                                 + "[입력값=" + histReq.getDeptName() + ", 실제값=" + actualDeptName + "]");
                     }
                 }
 
                 // 3. 중복 이력 검사 (종료일 고려 없이 시작일과 부서ID로만 정확히 판별)
-                boolean alreadyExists = historyRepository.findByMemberOrderByStartDateAscEndDateAsc(member).stream()
-                        .anyMatch(h -> h.getDepartment().getDepartmentId().equals(dept.getDepartmentId())
-                                && h.getStartDate().equals(startDate));
+                Department finalDept = dept;
+                Optional<MemberDepartmentHistory> existingHistoryOpt = historyRepository
+                        .findByMemberOrderByStartDateAscEndDateAsc(member)
+                        .stream()
+                        .filter(history -> history.getStartDate().equals(startDate))
+                        .findFirst();
 
-                if (alreadyExists) {
-                    continue; // 이미 동일한 날짜에 동일한 부서 이력이 있다면 중복 저장 방지
+                if (existingHistoryOpt.isPresent()) {
+                    historyRepository.delete(existingHistoryOpt.get());
+                    historyRepository.flush(); // 즉시 삭제 반영
                 }
 
                 // 4. 새 부서 이력 저장 (endDate 무시)
                 MemberDepartmentHistory history = MemberDepartmentHistory.builder()
                         .member(member)
-                        .department(dept)
+                        .department(finalDept)
                         .startDate(startDate)
                         .build();
                 historyRepository.save(history);
@@ -277,8 +291,8 @@ public class MemberService {
      * 형식:
      * 1열: 고유번호
      * 2열: 성명
-     * 3열: 당시운영부서코드
-     * 4열: 당시운영부서명
+     * 3열: 당시운영부서코드 (비어있을 수 있음)
+     * 4열: 당시운영부서명 (비어있을 수 있음)
      * 5열: 시작일
      */
     @Transactional
@@ -308,18 +322,19 @@ public class MemberService {
                     } else {
                         val = getCellValueAsString(cell);
                     }
-                    if (!val.trim().isEmpty()) {
-                        rowData.add(val);
-                    }
+                    rowData.add(val.trim()); // 빈 값이더라도 인덱스 유지를 위해 add
                 }
 
-                // 데이터가 5개 이상 채워진 행만 유효한 데이터로 간주
+                // 데이터가 5개 이상 채워진 행만 유효한 데이터로 간주 (사번, 성명, 시작일은 필수)
                 if (rowData.size() < 5) continue;
 
-                String memberCode = rowData.get(0).trim();
-                String name = rowData.get(1).trim();
-                String deptCode = rowData.get(2).trim();
-                String rawDateStr = rowData.get(4).trim();
+                String memberCode = rowData.get(0);
+                if (memberCode.isEmpty()) continue; // 사번 없으면 스킵
+
+                String name = rowData.get(1);
+                String deptCode = rowData.get(2);
+                String deptName = rowData.get(3);
+                String rawDateStr = rowData.get(4);
                 
                 LocalDate startDate = parseLocalDateFromString(rawDateStr);
 
@@ -335,39 +350,63 @@ public class MemberService {
                                         .build()
                         ));
 
-                if (deptCode.isEmpty()) {
-                    continue;
+                Department department = null;
+
+                // 부서코드나 부서명이 하나라도 있어야 이력을 추가함
+                if (!deptCode.isEmpty() || !deptName.isEmpty()) {
+                    if (!deptCode.isEmpty()) {
+                        // 1순위: 부서 코드로 조회
+                        department = departmentRepository.findByDeptCd(deptCode)
+                                .orElseThrow(() -> new RuntimeException(rowIndex + "행: 존재하지 않는 부서코드입니다. deptCode=" + deptCode));
+                        
+                        // 부서명도 있다면 검증
+                        if (!deptName.isEmpty()) {
+                            List<String> deptNamesAtTime = departmentNameHistoryRepository
+                                    .findDeptNameAtTime(department.getDepartmentId(), startDate);
+
+                            if (deptNamesAtTime.isEmpty()) {
+                                throw new RuntimeException(rowIndex + "행: " + startDate + " 기준 부서명 이력이 없습니다. deptCode=" + deptCode);
+                            }
+
+                            String actualDeptName = deptNamesAtTime.get(0);
+                            // 검증 시에도 띄어쓰기를 모두 없앤 후 비교합니다.
+                            String normalizedReqDeptName = deptName.replaceAll("\\s+", "");
+                            if (!actualDeptName.equals(normalizedReqDeptName)) {
+                                throw new RuntimeException(rowIndex + "행: 부서코드와 부서명이 일치하지 않습니다. "
+                                        + "[요청값=" + deptName + ", DB기준=" + actualDeptName + "]");
+                            }
+                        }
+                    } else {
+                        // 2순위: 부서 코드가 비어있고 부서명만 있는 경우 -> 부서명 이력을 이용해 해당 시점의 부서를 역추적
+                        String normalizedDeptName = deptName.replaceAll("\\s+", "");
+                        department = departmentNameHistoryRepository.findDepartmentByNameAtTime(normalizedDeptName, startDate)
+                                .orElseThrow(() -> new RuntimeException(rowIndex + "행: 해당 일자(" + startDate + ") 기준 부서명(" + deptName + ")을 가진 부서를 찾을 수 없습니다."));
+                    }
+
+                    // 요구사항: 엑셀 파일에 동일한 사원에 대해 '동일한 날짜'로 입소한 부서 이력이 여러 개 있다면,
+                    // 맨 아래에 나온 이력만 DB에 저장되도록 한다. 
+                    // 위에서 아래로 처리하므로 동일한 날짜의 이력이 발견되면 기존 것을 삭제하고 현재 행의 데이터로 새로 저장한다.
+                    Optional<MemberDepartmentHistory> existingHistoryOpt = historyRepository
+                            .findByMemberOrderByStartDateAscEndDateAsc(member)
+                            .stream()
+                            .filter(history -> history.getStartDate().equals(startDate))
+                            .findFirst();
+
+                    if (existingHistoryOpt.isPresent()) {
+                        // 기존 이력 삭제 (가장 마지막 데이터만 남기기 위함)
+                        historyRepository.delete(existingHistoryOpt.get());
+                        historyRepository.flush(); // 즉시 삭제 반영
+                    }
+
+                    // 새 이력 저장
+                    MemberDepartmentHistory history = MemberDepartmentHistory.builder()
+                            .member(member)
+                            .department(department)
+                            .startDate(startDate)
+                            .build();
+
+                    historyRepository.save(history);
                 }
-
-                Department department = departmentRepository.findByDeptCd(deptCode)
-                        .orElseThrow(() ->
-                                new RuntimeException(rowIndex + "행: 존재하지 않는 부서코드입니다. deptCode=" + deptCode));
-
-                // 요구사항: 엑셀 파일에 동일한 사원에 대해 '동일한 날짜'로 입소한 부서 이력이 여러 개 있다면,
-                // 맨 아래에 나온 이력만 DB에 저장되도록 한다. 
-                // 위에서 아래로 처리하므로 동일한 날짜의 이력이 발견되면 기존 것을 삭제하고 현재 행의 데이터로 새로 저장한다.
-                Optional<MemberDepartmentHistory> existingHistoryOpt = historyRepository
-                        .findByMemberOrderByStartDateAscEndDateAsc(member)
-                        .stream()
-                        .filter(history -> history.getStartDate().equals(startDate))
-                        .findFirst();
-
-                if (existingHistoryOpt.isPresent()) {
-                    // 동일한 날짜의 이력이 있으면 기존 이력을 삭제하고 새로 덮어쓰거나, 
-                    // 부서만 업데이트할 수 있으나 구조상 삭제 후 저장이 안전할 수 있습니다.
-                    // 여기서는 기존 이력을 지우고 새로 저장하는 방식으로 '가장 마지막 데이터'만 남도록 처리합니다.
-                    historyRepository.delete(existingHistoryOpt.get());
-                    historyRepository.flush(); // 즉시 삭제 반영
-                }
-
-                // 새 이력 저장
-                MemberDepartmentHistory history = MemberDepartmentHistory.builder()
-                        .member(member)
-                        .department(department)
-                        .startDate(startDate)
-                        .build();
-
-                historyRepository.save(history);
             }
 
         } catch (Exception e) {
@@ -494,7 +533,9 @@ public class MemberService {
                     }
 
                     String actualDeptName = deptNamesAtTime.get(0);
-                    if (!actualDeptName.equals(histReq.getDeptName())) {
+                    // 검증 시에도 띄어쓰기를 모두 없앤 후 비교
+                    String normalizedReqDeptName = histReq.getDeptName().replaceAll("\\s+", "");
+                    if (!actualDeptName.equals(normalizedReqDeptName)) {
                         throw new RuntimeException("입력한 부서명과 해당 일자의 실제 부서명이 일치하지 않습니다. "
                                 + "[입력값=" + histReq.getDeptName() + ", 실제값=" + actualDeptName + "]");
                     }

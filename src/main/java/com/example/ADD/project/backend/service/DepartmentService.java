@@ -94,7 +94,8 @@ public class DepartmentService {
 
             DepartmentNameHistory nameHistory = DepartmentNameHistory.builder()
                     .department(department)
-                    .deptName(request.getDeptName())
+                    // 부서명 공백 제거 처리
+                    .deptName(request.getDeptName().replaceAll("\\s+", ""))
                     .startDate(startDate)
                     .build();
 
@@ -129,7 +130,8 @@ public class DepartmentService {
         }
 
         if (request.getDeptName() != null && !request.getDeptName().isEmpty()) {
-            history.updateDeptName(request.getDeptName());
+            // 부서명 공백 제거 처리
+            history.updateDeptName(request.getDeptName().replaceAll("\\s+", ""));
         }
 
         if (request.getStartDate() != null) {
@@ -189,7 +191,10 @@ public class DepartmentService {
                 String deptCode = getCellValueAsString(row.getCell(0)).trim();
                 String rawDateStr = getCellValueAsString(row.getCell(1)).trim();
                 LocalDate startDate = getCellValueAsLocalDate(row.getCell(1));
-                String deptName = getCellValueAsString(row.getCell(2));
+                
+                // 부서명을 읽어올 때 모든 띄어쓰기(공백)를 완전히 제거합니다.
+                String rawDeptName = getCellValueAsString(row.getCell(2));
+                String deptName = rawDeptName.replaceAll("\\s+", "");
 
                 log.info(
                         "rowIndex={}, deptCode='{}', rawDateStr='{}', parsedStartDate={}, deptName='{}'",
@@ -197,18 +202,18 @@ public class DepartmentService {
                 );
 
                 // 완전 빈 행 스킵
-                if (deptCode.isEmpty() && rawDateStr.isEmpty() && deptName.trim().isEmpty()) {
+                if (deptCode.isEmpty() && rawDateStr.isEmpty() && deptName.isEmpty()) {
                     continue;
                 }
 
                 // 헤더 중복 행 스킵
                 if ("ORGAN_CD".equalsIgnoreCase(deptCode)
                         || "START_DATE".equalsIgnoreCase(rawDateStr)
-                        || "ORGAN_NM".equalsIgnoreCase(deptName.trim())) {
+                        || "ORGAN_NM".equalsIgnoreCase(rawDeptName.trim())) {
                     continue;
                 }
 
-                if (deptCode.isEmpty() || deptName.trim().isEmpty()) {
+                if (deptCode.isEmpty() || deptName.isEmpty()) {
                     throw new RuntimeException(rowIndex + "행: 부서코드와 부서명은 필수입니다.");
                 }
 
