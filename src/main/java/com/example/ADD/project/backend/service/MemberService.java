@@ -298,7 +298,16 @@ public class MemberService {
                 // 행에서 유효한 데이터를 담을 리스트 (빈 셀이나 숨긴 열 무시를 위해)
                 List<String> rowData = new java.util.ArrayList<>();
                 for (int j = 0; j < Math.max(10, row.getLastCellNum()); j++) {
-                    String val = getCellValueAsString(row.getCell(j));
+                    // 셀이 날짜 형식일 경우를 먼저 체크하여 처리
+                    Cell cell = row.getCell(j);
+                    String val = "";
+                    if (cell != null && cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+                        Date date = cell.getDateCellValue();
+                        LocalDate ld = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                        val = ld.toString(); // yyyy-MM-dd
+                    } else {
+                        val = getCellValueAsString(cell);
+                    }
                     if (!val.trim().isEmpty()) {
                         rowData.add(val);
                     }
@@ -382,6 +391,25 @@ public class MemberService {
                 double excelDate = Double.parseDouble(dateStr);
                 Date date = DateUtil.getJavaDate(excelDate);
                 return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        // mm/dd/yy 형식 (예: 3/31/05 -> 2005-03-31) 대응 추가
+        if (dateStr.matches("\\d{1,2}/\\d{1,2}/\\d{2}")) {
+            String[] parts = dateStr.split("/");
+            String month = parts[0];
+            String day = parts[1];
+            String year = parts[2];
+            
+            int y = Integer.parseInt(year);
+            year = (y >= 50 ? "19" : "20") + year;
+            if (month.length() == 1) month = "0" + month;
+            if (day.length() == 1) day = "0" + day;
+            
+            try {
+                return LocalDate.parse(year + "-" + month + "-" + day);
             } catch (Exception e) {
                 return null;
             }
